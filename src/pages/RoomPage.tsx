@@ -248,90 +248,90 @@ export default function RoomPage({ user }: Props) {
                 </div>
               </div>
 
-              {/* Timeline */}
-              <div className="px-4 pb-4">
-                {/* Hour labels */}
-                <div className="relative h-5 mb-1">
-                  {HOURS.map(h => {
-                    const pct = timeToPercent(h)
-                    return (
-                      <span
-                        key={h}
-                        className="absolute text-[10px] text-(--color-text-secondary) -translate-x-1/2"
-                        style={{ left: `${pct}%` }}
-                      >
-                        {h.replace(':00', '')}
-                      </span>
-                    )
-                  })}
-                </div>
+              {/* Timeline - 횡스크롤 */}
+              <div className="overflow-x-auto pb-4 px-4 scrollbar-hide">
+                <div style={{ width: '700px', minWidth: '700px' }}>
+                  {/* Hour labels */}
+                  <div className="relative h-5 mb-1">
+                    {HOURS.map(h => {
+                      const pct = timeToPercent(h)
+                      return (
+                        <span
+                          key={h}
+                          className="absolute text-[11px] text-(--color-text-secondary) -translate-x-1/2"
+                          style={{ left: `${pct}%` }}
+                        >
+                          {h.replace(':00', '')}
+                        </span>
+                      )
+                    })}
+                  </div>
 
-                {/* Timeline bar */}
-                <div
-                  className="relative h-14 rounded-xl bg-(--color-bg) border border-(--color-border) cursor-pointer overflow-hidden"
-                  onClick={(e) => handleTimelineClick(room, e)}
-                >
-                  {/* Hour grid lines */}
-                  {HOURS.map(h => {
-                    const pct = timeToPercent(h)
-                    return (
-                      <div
-                        key={h}
-                        className="absolute top-0 bottom-0 w-px bg-(--color-border)"
-                        style={{ left: `${pct}%` }}
-                      />
-                    )
-                  })}
+                  {/* Timeline bar */}
+                  <div
+                    className="relative h-16 rounded-xl bg-(--color-bg) border border-(--color-border) cursor-pointer overflow-hidden"
+                    onClick={(e) => handleTimelineClick(room, e)}
+                  >
+                    {/* Hour grid lines */}
+                    {HOURS.map(h => {
+                      const pct = timeToPercent(h)
+                      return (
+                        <div
+                          key={h}
+                          className="absolute top-0 bottom-0 w-px bg-(--color-border)"
+                          style={{ left: `${pct}%` }}
+                        />
+                      )
+                    })}
 
-                  {/* Reservation blocks */}
-                  {roomRes.map((res, idx) => {
-                    const leftPct = timeToPercent(res.start_time)
-                    const rightPct = timeToPercent(res.end_time)
-                    const widthPct = rightPct - leftPct
-                    const isMine = res.user_id === user.id
-                    const color = isMine
-                      ? { bg: 'rgba(96,165,250,0.35)', border: 'rgba(96,165,250,0.8)', text: '#1e40af', darkText: '#93c5fd' }
-                      : RESERVATION_COLORS[idx % RESERVATION_COLORS.length]
+                    {/* Reservation blocks */}
+                    {roomRes.map((res, idx) => {
+                      const leftPct = timeToPercent(res.start_time)
+                      const rightPct = timeToPercent(res.end_time)
+                      const widthPct = rightPct - leftPct
+                      const isMine = res.user_id === user.id
+                      const color = isMine
+                        ? { bg: 'rgba(96,165,250,0.35)', border: 'rgba(96,165,250,0.8)', text: '#1e40af', darkText: '#93c5fd' }
+                        : RESERVATION_COLORS[idx % RESERVATION_COLORS.length]
 
-                    return (
-                      <div
-                        key={res.id}
-                        className="absolute top-1 bottom-1 rounded-lg flex flex-col justify-center px-2 overflow-hidden"
-                        style={{
-                          left: `${leftPct}%`,
-                          width: `${widthPct}%`,
-                          backgroundColor: color.bg,
-                          borderLeft: `3px solid ${color.border}`,
-                          backgroundImage: `repeating-linear-gradient(135deg, transparent, transparent 3px, ${color.border} 3px, ${color.border} 4px)`,
-                          backgroundSize: '7px 7px',
-                        }}
-                      >
-                        <div className="relative z-10 bg-white/70 dark:bg-black/40 rounded px-1 py-0.5 inline-block w-fit max-w-full">
-                          <span className="text-[11px] font-bold truncate block" style={{ color: color.text }}>
-                            {res.user_name}
-                          </span>
-                        </div>
-                        {widthPct > 18 && (
-                          <span className="relative z-10 text-[9px] mt-0.5 truncate opacity-80" style={{ color: color.text }}>
+                      return (
+                        <div
+                          key={res.id}
+                          className="absolute top-1 bottom-1 rounded-lg flex flex-col justify-center px-2 overflow-hidden"
+                          style={{
+                            left: `${leftPct}%`,
+                            width: `${widthPct}%`,
+                            backgroundColor: color.bg,
+                            borderLeft: `3px solid ${color.border}`,
+                            backgroundImage: `repeating-linear-gradient(135deg, transparent, transparent 3px, ${color.border} 3px, ${color.border} 4px)`,
+                            backgroundSize: '7px 7px',
+                          }}
+                        >
+                          <div className="relative z-10 bg-white/70 dark:bg-black/40 rounded px-1 py-0.5 inline-block w-fit max-w-full">
+                            <span className="text-xs font-bold truncate block" style={{ color: color.text }}>
+                              {res.user_name}
+                            </span>
+                          </div>
+                          <span className="relative z-10 text-[10px] mt-0.5 truncate opacity-80" style={{ color: color.text }}>
                             {res.start_time}~{res.end_time}
                           </span>
-                        )}
-                      </div>
-                    )
-                  })}
+                        </div>
+                      )
+                    })}
 
-                  {/* Current time indicator */}
-                  {selectedDate === new Date().toISOString().split('T')[0] && (() => {
-                    const now = new Date()
-                    const currentMinutes = now.getHours() * 60 + now.getMinutes()
-                    if (currentMinutes < 540 || currentMinutes > 1080) return null
-                    const pct = ((currentMinutes - 540) / 540) * 100
-                    return (
-                      <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10" style={{ left: `${pct}%` }}>
-                        <div className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-red-500" />
-                      </div>
-                    )
-                  })()}
+                    {/* Current time indicator */}
+                    {selectedDate === new Date().toISOString().split('T')[0] && (() => {
+                      const now = new Date()
+                      const currentMinutes = now.getHours() * 60 + now.getMinutes()
+                      if (currentMinutes < 540 || currentMinutes > 1080) return null
+                      const pct = ((currentMinutes - 540) / 540) * 100
+                      return (
+                        <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10" style={{ left: `${pct}%` }}>
+                          <div className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-red-500" />
+                        </div>
+                      )
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>
