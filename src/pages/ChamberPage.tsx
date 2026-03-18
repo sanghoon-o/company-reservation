@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { CHAMBERS, type RoomReservation, type User } from '../lib/types'
 import Modal from '../components/Modal'
@@ -116,39 +117,71 @@ export default function ChamberPage({ user }: Props) {
     }
   }
 
-  const formatDateLabel = (d: string) => {
+  const formatDateHeader = (d: string) => {
+    const date = new Date(d + 'T00:00:00')
+    const days = ['일요일','월요일','화요일','수요일','목요일','금요일','토요일']
+    return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일 · ${days[date.getDay()]}`
+  }
+
+  const formatDateChip = (d: string) => {
     const date = new Date(d + 'T00:00:00')
     const days = ['일','월','화','수','목','금','토']
-    return `${date.getMonth() + 1}/${date.getDate()} (${days[date.getDay()]})`
+    return { day: date.getDate(), dow: days[date.getDay()], isWeekend: date.getDay() === 0 || date.getDay() === 6 }
+  }
+
+  const navigateDate = (dir: -1 | 1) => {
+    const idx = dates.indexOf(selectedDate)
+    const next = idx + dir
+    if (next >= 0 && next < dates.length) setSelectedDate(dates[next])
   }
 
   return (
     <div className="flex flex-col h-full">
-      {/* Date selector */}
-      <div className="sticky top-0 z-10 bg-(--color-bg) border-b border-(--color-border)">
-        <div className="flex gap-2 overflow-x-auto px-4 py-3 scrollbar-hide">
-          {dates.map(d => (
-            <button
-              key={d}
-              onClick={() => setSelectedDate(d)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                d === selectedDate
-                  ? 'bg-(--color-primary) text-white'
-                  : 'bg-(--color-surface) text-(--color-text-secondary) border border-(--color-border)'
-              }`}
-            >
-              {formatDateLabel(d)}
-            </button>
-          ))}
+      {/* Date header */}
+      <div className="sticky top-0 z-10 bg-(--color-bg)">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-(--color-border)">
+          <button onClick={() => navigateDate(-1)} className="rounded-full p-1.5 hover:bg-(--color-border)">
+            <ChevronLeft size={18} />
+          </button>
+          <span className="text-sm font-bold text-(--color-text)">{formatDateHeader(selectedDate)}</span>
+          <button onClick={() => navigateDate(1)} className="rounded-full p-1.5 hover:bg-(--color-border)">
+            <ChevronRight size={18} />
+          </button>
         </div>
-        <div className="px-4 pb-2 text-xs text-(--color-text-secondary)">
+
+        {/* Date chips */}
+        <div className="flex gap-1 overflow-x-auto px-3 py-2 scrollbar-hide border-b border-(--color-border)">
+          {dates.map(d => {
+            const { day, dow, isWeekend } = formatDateChip(d)
+            const isActive = d === selectedDate
+            const isToday = d === new Date().toISOString().split('T')[0]
+            return (
+              <button
+                key={d}
+                onClick={() => setSelectedDate(d)}
+                className={`flex flex-col items-center shrink-0 w-10 py-1.5 rounded-xl text-[11px] transition-all ${
+                  isActive
+                    ? 'bg-(--color-primary) text-white shadow-md'
+                    : isToday
+                      ? 'bg-(--color-primary)/10 text-(--color-primary-light)'
+                      : 'text-(--color-text-secondary) hover:bg-(--color-border)'
+                }`}
+              >
+                <span className={`text-[10px] ${isWeekend && !isActive ? 'text-red-400' : ''}`}>{dow}</span>
+                <span className="text-sm font-bold">{day}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="px-4 py-2 text-xs text-(--color-text-secondary)">
           24시간 운영 · 1시간 단위
         </div>
       </div>
 
       {/* Time grid */}
       <div className="flex-1 overflow-y-auto pb-24 px-4">
-        <div className="mt-2 space-y-1">
+        <div className="space-y-1">
           {SLOTS.map(time => {
             const res = getSlotReservation(time)
             const isMine = res?.user_id === user.id
@@ -194,7 +227,7 @@ export default function ChamberPage({ user }: Props) {
       <Modal open={modal?.type === 'book'} onClose={() => setModal(null)} title="챔버 예약">
         <div className="space-y-3">
           <div className="text-sm text-(--color-text-secondary)">
-            {formatDateLabel(selectedDate)} · {modal?.slot}~
+            {formatDateHeader(selectedDate)} · {modal?.slot}~
           </div>
           <select
             value={endTime}
@@ -222,7 +255,7 @@ export default function ChamberPage({ user }: Props) {
         </div>
       </Modal>
 
-      {/* Detail Modal (예약 정보 + 본인이면 취소) */}
+      {/* Detail Modal */}
       <Modal open={modal?.type === 'detail'} onClose={() => setModal(null)} title="예약 정보">
         {modal?.reservation && (
           <div className="space-y-4">
