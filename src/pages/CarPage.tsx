@@ -10,7 +10,7 @@ export default function CarPage({ user }: Props) {
   const [year, setYear] = useState(() => new Date().getFullYear())
   const [month, setMonth] = useState(() => new Date().getMonth())
   const [reservations, setReservations] = useState<CarReservation[]>([])
-  const [modal, setModal] = useState<{ type: 'book' | 'info' | 'cancel'; date: string; car: string; reservation?: CarReservation } | null>(null)
+  const [modal, setModal] = useState<{ type: 'book' | 'detail'; date: string; car: string; reservation?: CarReservation } | null>(null)
   const [destination, setDestination] = useState('')
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(false)
@@ -55,10 +55,8 @@ export default function CarPage({ user }: Props) {
       setDestination('')
       setReason('')
       setModal({ type: 'book', date, car: carName })
-    } else if (res.user_id === user.id) {
-      setModal({ type: 'cancel', date, car: carName, reservation: res })
     } else {
-      setModal({ type: 'info', date, car: carName, reservation: res })
+      setModal({ type: 'detail', date, car: carName, reservation: res })
     }
   }
 
@@ -233,40 +231,29 @@ export default function CarPage({ user }: Props) {
         </div>
       </Modal>
 
-      {/* Info Modal */}
-      <Modal open={modal?.type === 'info'} onClose={() => setModal(null)} title="예약 정보">
-        {modal?.reservation && (
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-(--color-text-secondary)">차량</span><span className="font-medium">{modal.reservation.car_name}</span></div>
-            <div className="flex justify-between"><span className="text-(--color-text-secondary)">날짜</span><span>{formatDate(modal.reservation.date)}</span></div>
-            <div className="flex justify-between"><span className="text-(--color-text-secondary)">예약자</span><span>{modal.reservation.user_name}</span></div>
-            <div className="flex justify-between"><span className="text-(--color-text-secondary)">행선지</span><span>{modal.reservation.destination}</span></div>
-            {modal.reservation.reason && (
-              <div className="flex justify-between"><span className="text-(--color-text-secondary)">사유</span><span>{modal.reservation.reason}</span></div>
-            )}
-          </div>
-        )}
-      </Modal>
-
-      {/* Cancel Modal */}
-      <Modal open={modal?.type === 'cancel'} onClose={() => setModal(null)} title="예약 취소">
+      {/* Detail Modal (예약 정보 + 본인이면 취소) */}
+      <Modal open={modal?.type === 'detail'} onClose={() => setModal(null)} title="예약 정보">
         {modal?.reservation && (
           <div className="space-y-4">
-            <p className="text-sm text-(--color-text-secondary)">
-              {formatDate(modal.reservation.date)} <strong>{modal.reservation.car_name}</strong> 예약을 취소하시겠습니까?
-            </p>
-            <div className="flex gap-2">
-              <button onClick={() => setModal(null)} className="flex-1 rounded-lg border border-(--color-border) py-3 text-sm font-medium text-(--color-text)">
-                닫기
-              </button>
-              <button
-                onClick={handleCancel}
-                disabled={loading}
-                className="flex-1 rounded-lg bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                {loading ? '취소 중...' : '예약 취소'}
-              </button>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-(--color-text-secondary)">차량</span><span className="font-medium">{modal.reservation.car_name}</span></div>
+              <div className="flex justify-between"><span className="text-(--color-text-secondary)">날짜</span><span>{formatDate(modal.reservation.date)}</span></div>
+              <div className="flex justify-between"><span className="text-(--color-text-secondary)">예약자</span><span className="font-medium">{modal.reservation.user_name}</span></div>
+              <div className="flex justify-between"><span className="text-(--color-text-secondary)">행선지</span><span>{modal.reservation.destination}</span></div>
+              {modal.reservation.reason && (
+                <div className="flex justify-between"><span className="text-(--color-text-secondary)">사유</span><span>{modal.reservation.reason}</span></div>
+              )}
             </div>
+            {modal.reservation.user_id === user.id ? (
+              <div className="flex gap-2">
+                <button onClick={() => setModal(null)} className="flex-1 rounded-lg border border-(--color-border) py-3 text-sm font-medium text-(--color-text)">닫기</button>
+                <button onClick={handleCancel} disabled={loading} className="flex-1 rounded-lg bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-50">
+                  {loading ? '취소 중...' : '예약 취소'}
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setModal(null)} className="w-full rounded-lg border border-(--color-border) py-3 text-sm font-medium text-(--color-text)">닫기</button>
+            )}
           </div>
         )}
       </Modal>

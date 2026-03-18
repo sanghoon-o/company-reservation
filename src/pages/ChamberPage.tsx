@@ -30,7 +30,7 @@ export default function ChamberPage({ user }: Props) {
   const dates = generateDates()
   const [selectedDate, setSelectedDate] = useState(dates[0])
   const [reservations, setReservations] = useState<RoomReservation[]>([])
-  const [modal, setModal] = useState<{ type: 'book' | 'cancel'; slot: string; reservation?: RoomReservation } | null>(null)
+  const [modal, setModal] = useState<{ type: 'book' | 'detail'; slot: string; reservation?: RoomReservation } | null>(null)
   const [endTime, setEndTime] = useState('')
   const [purpose, setPurpose] = useState('')
   const [loading, setLoading] = useState(false)
@@ -71,9 +71,7 @@ export default function ChamberPage({ user }: Props) {
   const handleSlotClick = (time: string) => {
     const res = getSlotReservation(time)
     if (res) {
-      if (res.user_id === user.id) {
-        setModal({ type: 'cancel', slot: time, reservation: res })
-      }
+      setModal({ type: 'detail', slot: time, reservation: res })
       return
     }
     setEndTime(getEndTimeOptions(time)[0] || '')
@@ -224,19 +222,26 @@ export default function ChamberPage({ user }: Props) {
         </div>
       </Modal>
 
-      {/* Cancel Modal */}
-      <Modal open={modal?.type === 'cancel'} onClose={() => setModal(null)} title="예약 취소">
+      {/* Detail Modal (예약 정보 + 본인이면 취소) */}
+      <Modal open={modal?.type === 'detail'} onClose={() => setModal(null)} title="예약 정보">
         {modal?.reservation && (
           <div className="space-y-4">
-            <p className="text-sm text-(--color-text-secondary)">
-              챔버 {modal.reservation.start_time}~{modal.reservation.end_time} 예약을 취소하시겠습니까?
-            </p>
-            <div className="flex gap-2">
-              <button onClick={() => setModal(null)} className="flex-1 rounded-lg border border-(--color-border) py-3 text-sm font-medium text-(--color-text)">닫기</button>
-              <button onClick={handleCancel} disabled={loading} className="flex-1 rounded-lg bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-50">
-                {loading ? '취소 중...' : '예약 취소'}
-              </button>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-(--color-text-secondary)">챔버</span><span className="font-medium">{modal.reservation.resource_name}</span></div>
+              <div className="flex justify-between"><span className="text-(--color-text-secondary)">시간</span><span>{modal.reservation.start_time} ~ {modal.reservation.end_time}</span></div>
+              <div className="flex justify-between"><span className="text-(--color-text-secondary)">예약자</span><span className="font-medium">{modal.reservation.user_name}</span></div>
+              <div className="flex justify-between"><span className="text-(--color-text-secondary)">목적</span><span>{modal.reservation.purpose}</span></div>
             </div>
+            {modal.reservation.user_id === user.id ? (
+              <div className="flex gap-2">
+                <button onClick={() => setModal(null)} className="flex-1 rounded-lg border border-(--color-border) py-3 text-sm font-medium text-(--color-text)">닫기</button>
+                <button onClick={handleCancel} disabled={loading} className="flex-1 rounded-lg bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-50">
+                  {loading ? '취소 중...' : '예약 취소'}
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setModal(null)} className="w-full rounded-lg border border-(--color-border) py-3 text-sm font-medium text-(--color-text)">닫기</button>
+            )}
           </div>
         )}
       </Modal>
