@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { CARS, type CarReservation, type User } from '../lib/types'
 import Modal from '../components/Modal'
+import { toLocalDateStr } from '../lib/date'
 
 interface Props { user: User }
 
@@ -43,7 +44,7 @@ export default function CarPage({ user }: Props) {
 
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const firstDayOfWeek = new Date(year, month, 1).getDay()
-  const today = new Date().toISOString().split('T')[0]
+  const today = toLocalDateStr()
 
   const getReservation = (date: string, carName: string) =>
     reservations.find(r => r.date === date && r.car_name === carName)

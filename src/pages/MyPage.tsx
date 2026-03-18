@@ -3,6 +3,7 @@ import { Car, DoorOpen, Box, LogOut, Moon, Sun } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { CarReservation, RoomReservation, User } from '../lib/types'
 import Modal from '../components/Modal'
+import { toLocalDateStr } from '../lib/date'
 
 interface Props {
   user: User
@@ -18,7 +19,7 @@ export default function MyPage({ user, onLogout, dark, onToggleDark }: Props) {
   const [cancelTarget, setCancelTarget] = useState<AnyReservation | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = toLocalDateStr()
 
   const fetchAll = useCallback(async () => {
     const [cars, rooms] = await Promise.all([

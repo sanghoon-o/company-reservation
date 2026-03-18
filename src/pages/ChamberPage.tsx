@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { CHAMBERS, type RoomReservation, type User } from '../lib/types'
 import Modal from '../components/Modal'
+import { toLocalDateStr } from '../lib/date'
 
 interface Props { user: User }
 
@@ -22,7 +23,7 @@ function generateDates(): string[] {
   for (let i = 0; i <= 30; i++) {
     const d = new Date(now)
     d.setDate(d.getDate() + i)
-    dates.push(d.toISOString().split('T')[0])
+    dates.push(toLocalDateStr(d))
   }
   return dates
 }
@@ -154,7 +155,7 @@ export default function ChamberPage({ user }: Props) {
           {dates.map(d => {
             const { day, dow, isWeekend } = formatDateChip(d)
             const isActive = d === selectedDate
-            const isToday = d === new Date().toISOString().split('T')[0]
+            const isToday = d === toLocalDateStr()
             return (
               <button
                 key={d}
