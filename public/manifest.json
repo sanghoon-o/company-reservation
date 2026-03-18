@@ -1,6 +1,6 @@
 {
-  "name": "사내 예약 시스템",
-  "short_name": "예약",
+  "name": "에델예약",
+  "short_name": "에델예약",
   "description": "차량, 미팅룸, 챔버 통합 예약 시스템",
   "start_url": "/",
   "display": "standalone",
