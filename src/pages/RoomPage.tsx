@@ -44,18 +44,17 @@ function generateDates(): string[] {
   return dates
 }
 
-const ROOM_INFO: Record<string, { color: string }> = {
-  '미팅룸7': { color: '#6366f1' },
-  '미팅룸8': { color: '#0ea5e9' },
+const ROOM_INFO: Record<string, { color: string; reservationColor: { bg: string; border: string; text: string } }> = {
+  '미팅룸7': {
+    color: '#6366f1',
+    reservationColor: { bg: 'rgba(96,165,250,0.35)', border: 'rgba(96,165,250,0.8)', text: '#1e40af' },
+  },
+  '미팅룸8': {
+    color: '#0ea5e9',
+    reservationColor: { bg: 'rgba(251,182,206,0.45)', border: 'rgba(244,143,177,0.8)', text: '#9d174d' },
+  },
 }
 
-const RESERVATION_COLORS = [
-  { bg: 'rgba(244,163,149,0.45)', border: 'rgba(244,163,149,0.8)', text: '#b04a3a', darkText: '#fca5a5' },
-  { bg: 'rgba(147,197,253,0.45)', border: 'rgba(147,197,253,0.8)', text: '#1e40af', darkText: '#93c5fd' },
-  { bg: 'rgba(167,243,208,0.45)', border: 'rgba(167,243,208,0.8)', text: '#065f46', darkText: '#6ee7b7' },
-  { bg: 'rgba(253,224,71,0.40)', border: 'rgba(253,224,71,0.8)', text: '#854d0e', darkText: '#fde047' },
-  { bg: 'rgba(196,181,253,0.45)', border: 'rgba(196,181,253,0.8)', text: '#5b21b6', darkText: '#c4b5fd' },
-]
 
 export default function RoomPage({ user }: Props) {
   const dates = generateDates()
@@ -286,14 +285,11 @@ export default function RoomPage({ user }: Props) {
                     })}
 
                     {/* Reservation blocks */}
-                    {roomRes.map((res, idx) => {
+                    {roomRes.map((res) => {
                       const leftPct = timeToPercent(res.start_time)
                       const rightPct = timeToPercent(res.end_time)
                       const widthPct = rightPct - leftPct
-                      const isMine = res.user_id === user.id
-                      const color = isMine
-                        ? { bg: 'rgba(96,165,250,0.35)', border: 'rgba(96,165,250,0.8)', text: '#1e40af', darkText: '#93c5fd' }
-                        : RESERVATION_COLORS[idx % RESERVATION_COLORS.length]
+                      const color = info.reservationColor
 
                       return (
                         <div

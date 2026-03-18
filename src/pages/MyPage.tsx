@@ -19,8 +19,6 @@ export default function MyPage({ user, onLogout, dark, onToggleDark }: Props) {
   const [cancelTarget, setCancelTarget] = useState<AnyReservation | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const today = toLocalDateStr()
-
   const fetchAll = useCallback(async () => {
     const [cars, rooms] = await Promise.all([
       supabase
@@ -28,23 +26,21 @@ export default function MyPage({ user, onLogout, dark, onToggleDark }: Props) {
         .select('*')
         .eq('user_id', user.id)
         .eq('status', 'confirmed')
-        .gte('date', today)
-        .order('date', { ascending: true }),
+        .order('date', { ascending: false }),
       supabase
         .from('room_reservations')
         .select('*')
         .eq('user_id', user.id)
         .eq('status', 'confirmed')
-        .gte('date', today)
-        .order('date', { ascending: true })
-        .order('start_time', { ascending: true }),
+        .order('date', { ascending: false })
+        .order('start_time', { ascending: false }),
     ])
 
     const carItems = (cars.data || []).map(c => ({ ...c, _type: 'car' as const }))
     const roomItems = (rooms.data || []).map(r => ({ ...r, _type: 'room' as const }))
-    const all = [...carItems, ...roomItems].sort((a, b) => a.date.localeCompare(b.date))
+    const all = [...carItems, ...roomItems].sort((a, b) => b.date.localeCompare(a.date))
     setItems(all)
-  }, [user.id, today])
+  }, [user.id])
 
   useEffect(() => { fetchAll() }, [fetchAll])
 
@@ -111,38 +107,55 @@ export default function MyPage({ user, onLogout, dark, onToggleDark }: Props) {
 
       {/* Reservation list */}
       <div className="flex-1 overflow-y-auto pb-24 px-4">
-        <h3 className="mt-4 mb-2 text-sm font-semibold text-(--color-text-secondary)">
-          예정된 예약 ({items.length})
-        </h3>
-        {items.length === 0 ? (
-          <div className="py-12 text-center text-(--color-text-secondary) text-sm">
-            예정된 예약이 없습니다
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {items.map(item => {
-              const Icon = getIcon(item)
-              return (
-                <button
-                  key={`${item._type}-${item.id}`}
-                  onClick={() => setCancelTarget(item)}
-                  className="w-full flex items-center gap-3 rounded-xl bg-(--color-surface) border border-(--color-border) p-3 text-left hover:border-(--color-primary-light) transition-colors"
-                >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-(--color-primary)/10">
-                    <Icon size={20} className="text-(--color-primary-light)" />
+        {(() => {
+          const today = toLocalDateStr()
+          const upcoming = items.filter(i => i.date >= today)
+          const past = items.filter(i => i.date < today)
+
+          const renderItem = (item: AnyReservation, isPast: boolean) => {
+            const Icon = getIcon(item)
+            return (
+              <button
+                key={`${item._type}-${item.id}`}
+                onClick={() => !isPast && setCancelTarget(item)}
+                className={`w-full flex items-center gap-3 rounded-xl bg-(--color-surface) border border-(--color-border) p-3 text-left transition-colors ${isPast ? 'opacity-50' : 'hover:border-(--color-primary-light)'}`}
+              >
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${isPast ? 'bg-gray-200 dark:bg-gray-700' : 'bg-(--color-primary)/10'}`}>
+                  <Icon size={20} className={isPast ? 'text-gray-400' : 'text-(--color-primary-light)'} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">{getLabel(item)}</span>
+                    <span className="text-xs text-(--color-text-secondary)">{formatDate(item.date)}</span>
+                    {isPast && <span className="text-[10px] text-(--color-text-secondary) bg-(--color-border) rounded px-1">지남</span>}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold">{getLabel(item)}</span>
-                      <span className="text-xs text-(--color-text-secondary)">{formatDate(item.date)}</span>
-                    </div>
-                    <p className="text-xs text-(--color-text-secondary) truncate">{getDetail(item)}</p>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        )}
+                  <p className="text-xs text-(--color-text-secondary) truncate">{getDetail(item)}</p>
+                </div>
+              </button>
+            )
+          }
+
+          return (
+            <>
+              <h3 className="mt-4 mb-2 text-sm font-semibold text-(--color-text-secondary)">
+                예정된 예약 ({upcoming.length})
+              </h3>
+              {upcoming.length === 0 ? (
+                <div className="py-8 text-center text-(--color-text-secondary) text-sm">예정된 예약이 없습니다</div>
+              ) : (
+                <div className="space-y-2">{upcoming.map(i => renderItem(i, false))}</div>
+              )}
+              {past.length > 0 && (
+                <>
+                  <h3 className="mt-6 mb-2 text-sm font-semibold text-(--color-text-secondary)">
+                    지난 예약 ({past.length})
+                  </h3>
+                  <div className="space-y-2">{past.map(i => renderItem(i, true))}</div>
+                </>
+              )}
+            </>
+          )
+        })()}
       </div>
 
       {/* Cancel Modal */}
