@@ -1,0 +1,22 @@
+{
+  "name": "사내 예약 시스템",
+  "short_name": "예약",
+  "description": "차량, 미팅룸, 챔버 통합 예약 시스템",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1e40af",
+  "theme_color": "#1e40af",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
