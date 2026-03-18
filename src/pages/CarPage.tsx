@@ -33,7 +33,7 @@ export default function CarPage({ user }: Props) {
   useEffect(() => { fetchReservations() }, [fetchReservations])
 
   useEffect(() => {
-    const channel = supabase.channel('car_changes')
+    const channel = supabase.channel(`car_rt_${year}_${month}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'car_reservations' }, () => {
         fetchReservations()
       })
@@ -81,6 +81,7 @@ export default function CarPage({ user }: Props) {
           alert('예약 실패: ' + error.message)
         }
       } else {
+        await fetchReservations()
         setModal(null)
       }
     } finally {
@@ -96,6 +97,7 @@ export default function CarPage({ user }: Props) {
         .from('car_reservations')
         .update({ status: 'cancelled' })
         .eq('id', modal.reservation.id)
+      await fetchReservations()
       setModal(null)
     } finally {
       setLoading(false)

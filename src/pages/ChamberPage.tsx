@@ -42,19 +42,26 @@ export default function ChamberPage({ user }: Props) {
       .eq('date', selectedDate)
       .eq('resource_type', 'chamber')
       .eq('status', 'confirmed')
-    if (data) setReservations(data)
+    if (data) {
+      const normalized = data.map(r => ({
+        ...r,
+        start_time: r.start_time.slice(0, 5),
+        end_time: r.end_time.slice(0, 5),
+      }))
+      setReservations(normalized)
+    }
   }, [selectedDate])
 
   useEffect(() => { fetchReservations() }, [fetchReservations])
 
   useEffect(() => {
-    const channel = supabase.channel('chamber_changes')
+    const channel = supabase.channel(`chamber_rt_${selectedDate}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'room_reservations' }, () => {
         fetchReservations()
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [fetchReservations])
+  }, [fetchReservations, selectedDate])
 
   const getSlotReservation = (time: string) =>
     reservations.find(r =>
@@ -91,6 +98,7 @@ export default function ChamberPage({ user }: Props) {
       if (error) {
         alert(error.message.includes('Time slot') ? '이미 예약된 시간입니다.' : '예약 실패: ' + error.message)
       } else {
+        await fetchReservations()
         setModal(null)
       }
     } finally {
@@ -103,6 +111,7 @@ export default function ChamberPage({ user }: Props) {
     setLoading(true)
     try {
       await supabase.from('room_reservations').update({ status: 'cancelled' }).eq('id', modal.reservation.id)
+      await fetchReservations()
       setModal(null)
     } finally {
       setLoading(false)

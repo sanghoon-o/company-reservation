@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronLeft, ChevronRight, Users } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { MEETING_ROOMS, type RoomReservation, type User } from '../lib/types'
 import Modal from '../components/Modal'
@@ -13,7 +13,19 @@ for (let h = 9; h < 18; h++) {
   SLOTS.push(`${String(h).padStart(2, '0')}:30`)
 }
 const HOURS = Array.from({ length: 10 }, (_, i) => `${String(i + 9).padStart(2, '0')}:00`)
-const TOTAL_SLOTS = SLOTS.length // 18 slots
+
+/** HH:MM:SS 또는 HH:MM → HH:MM 변환 */
+function normalizeTime(t: string): string {
+  return t.slice(0, 5)
+}
+
+/** 시간을 타임라인 퍼센트로 변환 (09:00=0%, 18:00=100%) */
+function timeToPercent(time: string): number {
+  const t = normalizeTime(time)
+  const [h, m] = t.split(':').map(Number)
+  const minutes = h * 60 + m
+  return ((minutes - 540) / 540) * 100  // 540 = 9*60, range = 18*60-9*60 = 540
+}
 
 function getEndTimeOptions(start: string) {
   const idx = SLOTS.indexOf(start)
@@ -31,32 +43,18 @@ function generateDates(): string[] {
   return dates
 }
 
-const ROOM_INFO: Record<string, { label: string; color: string; capacity: string }> = {
-  '미팅룸7': { label: '미팅룸7', color: '#6366f1', capacity: '8인실' },
-  '미팅룸8': { label: '미팅룸8', color: '#0ea5e9', capacity: '4인실' },
+const ROOM_INFO: Record<string, { color: string }> = {
+  '미팅룸7': { color: '#6366f1' },
+  '미팅룸8': { color: '#0ea5e9' },
 }
 
-// 예약 블록 색상 팔레트 (구분용)
 const RESERVATION_COLORS = [
-  { bg: 'rgba(244,163,149,0.45)', border: 'rgba(244,163,149,0.8)', text: '#b04a3a' },
-  { bg: 'rgba(147,197,253,0.45)', border: 'rgba(147,197,253,0.8)', text: '#1e40af' },
-  { bg: 'rgba(167,243,208,0.45)', border: 'rgba(167,243,208,0.8)', text: '#065f46' },
-  { bg: 'rgba(253,224,71,0.40)', border: 'rgba(253,224,71,0.8)', text: '#854d0e' },
-  { bg: 'rgba(196,181,253,0.45)', border: 'rgba(196,181,253,0.8)', text: '#5b21b6' },
-  { bg: 'rgba(252,165,165,0.45)', border: 'rgba(252,165,165,0.8)', text: '#991b1b' },
+  { bg: 'rgba(244,163,149,0.45)', border: 'rgba(244,163,149,0.8)', text: '#b04a3a', darkText: '#fca5a5' },
+  { bg: 'rgba(147,197,253,0.45)', border: 'rgba(147,197,253,0.8)', text: '#1e40af', darkText: '#93c5fd' },
+  { bg: 'rgba(167,243,208,0.45)', border: 'rgba(167,243,208,0.8)', text: '#065f46', darkText: '#6ee7b7' },
+  { bg: 'rgba(253,224,71,0.40)', border: 'rgba(253,224,71,0.8)', text: '#854d0e', darkText: '#fde047' },
+  { bg: 'rgba(196,181,253,0.45)', border: 'rgba(196,181,253,0.8)', text: '#5b21b6', darkText: '#c4b5fd' },
 ]
-
-function getColorForReservation(idx: number) {
-  return RESERVATION_COLORS[idx % RESERVATION_COLORS.length]
-}
-
-function slotIndex(time: string): number {
-  const idx = SLOTS.indexOf(time)
-  if (idx >= 0) return idx
-  // end_time이 18:00인 경우
-  if (time === '18:00') return TOTAL_SLOTS
-  return 0
-}
 
 export default function RoomPage({ user }: Props) {
   const dates = generateDates()
@@ -75,31 +73,49 @@ export default function RoomPage({ user }: Props) {
       .eq('date', selectedDate)
       .eq('resource_type', 'meeting_room')
       .eq('status', 'confirmed')
-    if (data) setReservations(data)
+    if (data) {
+      // Supabase TIME은 HH:MM:SS로 올 수 있으므로 HH:MM으로 정규화
+      const normalized = data.map(r => ({
+        ...r,
+        start_time: normalizeTime(r.start_time),
+        end_time: normalizeTime(r.end_time),
+      }))
+      setReservations(normalized)
+    }
   }, [selectedDate])
 
   useEffect(() => { fetchReservations() }, [fetchReservations])
 
   useEffect(() => {
-    const channel = supabase.channel('room_changes')
+    const channel = supabase.channel(`room_rt_${selectedDate}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'room_reservations' }, () => {
         fetchReservations()
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [fetchReservations])
+  }, [fetchReservations, selectedDate])
 
   const getRoomReservations = (room: string) =>
     reservations.filter(r => r.resource_name === room).sort((a, b) => a.start_time.localeCompare(b.start_time))
 
-  const handleTimelineClick = (room: string, e: React.MouseEvent<HTMLDivElement>) => {
+  const getSlotFromClick = (e: React.MouseEvent<HTMLDivElement>): string => {
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
     const pct = x / rect.width
-    const slotIdx = Math.floor(pct * TOTAL_SLOTS)
-    const clickedTime = SLOTS[Math.min(slotIdx, TOTAL_SLOTS - 1)]
+    const totalMinutes = pct * 540 // 9시간 = 540분
+    const slotMinutes = Math.floor(totalMinutes / 30) * 30
+    const h = Math.floor((540 + slotMinutes) / 60)
+    const m = (540 + slotMinutes) % 60
+    const time = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+    // 범위 제한
+    if (time < '09:00') return '09:00'
+    if (time >= '18:00') return '17:30'
+    return time
+  }
 
-    // 이미 예약된 슬롯인지 확인
+  const handleTimelineClick = (room: string, e: React.MouseEvent<HTMLDivElement>) => {
+    const clickedTime = getSlotFromClick(e)
+
     const existing = reservations.find(r =>
       r.resource_name === room && r.start_time <= clickedTime && r.end_time > clickedTime
     )
@@ -134,6 +150,7 @@ export default function RoomPage({ user }: Props) {
       if (error) {
         alert(error.message.includes('Time slot') ? '이미 예약된 시간입니다.' : '예약 실패: ' + error.message)
       } else {
+        await fetchReservations() // 즉시 리페치
         setModal(null)
       }
     } finally {
@@ -146,6 +163,7 @@ export default function RoomPage({ user }: Props) {
     setLoading(true)
     try {
       await supabase.from('room_reservations').update({ status: 'cancelled' }).eq('id', modal.reservation.id)
+      await fetchReservations() // 즉시 리페치
       setModal(null)
     } finally {
       setLoading(false)
@@ -227,12 +245,7 @@ export default function RoomPage({ user }: Props) {
                   {room.replace('미팅룸', '')}
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-base font-bold text-(--color-text)">{info.label}</h3>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="flex items-center gap-1 text-[11px] text-(--color-text-secondary)">
-                      <Users size={12} /> {info.capacity}
-                    </span>
-                  </div>
+                  <h3 className="text-base font-bold text-(--color-text)">{room}</h3>
                 </div>
                 <div className="text-xs text-(--color-text-secondary)">
                   {roomRes.length > 0 ? `${roomRes.length}건 예약` : '예약 없음'}
@@ -243,15 +256,18 @@ export default function RoomPage({ user }: Props) {
               <div className="px-4 pb-4">
                 {/* Hour labels */}
                 <div className="relative h-5 mb-1">
-                  {HOURS.map((h, i) => (
-                    <span
-                      key={h}
-                      className="absolute text-[10px] text-(--color-text-secondary) -translate-x-1/2"
-                      style={{ left: `${(i / (HOURS.length - 1)) * 100}%` }}
-                    >
-                      {h.replace(':00', '')}
-                    </span>
-                  ))}
+                  {HOURS.map(h => {
+                    const pct = timeToPercent(h)
+                    return (
+                      <span
+                        key={h}
+                        className="absolute text-[10px] text-(--color-text-secondary) -translate-x-1/2"
+                        style={{ left: `${pct}%` }}
+                      >
+                        {h.replace(':00', '')}
+                      </span>
+                    )
+                  })}
                 </div>
 
                 {/* Timeline bar */}
@@ -260,45 +276,47 @@ export default function RoomPage({ user }: Props) {
                   onClick={(e) => handleTimelineClick(room, e)}
                 >
                   {/* Hour grid lines */}
-                  {HOURS.map((h, i) => (
-                    <div
-                      key={h}
-                      className="absolute top-0 bottom-0 w-px bg-(--color-border)"
-                      style={{ left: `${(i / (HOURS.length - 1)) * 100}%` }}
-                    />
-                  ))}
+                  {HOURS.map(h => {
+                    const pct = timeToPercent(h)
+                    return (
+                      <div
+                        key={h}
+                        className="absolute top-0 bottom-0 w-px bg-(--color-border)"
+                        style={{ left: `${pct}%` }}
+                      />
+                    )
+                  })}
 
                   {/* Reservation blocks */}
                   {roomRes.map((res, idx) => {
-                    const startIdx = slotIndex(res.start_time)
-                    const endIdx = slotIndex(res.end_time)
-                    const leftPct = (startIdx / TOTAL_SLOTS) * 100
-                    const widthPct = ((endIdx - startIdx) / TOTAL_SLOTS) * 100
-                    const color = res.user_id === user.id
-                      ? { bg: 'rgba(96,165,250,0.35)', border: 'rgba(96,165,250,0.8)', text: '#1e40af' }
-                      : getColorForReservation(idx)
+                    const leftPct = timeToPercent(res.start_time)
+                    const rightPct = timeToPercent(res.end_time)
+                    const widthPct = rightPct - leftPct
+                    const isMine = res.user_id === user.id
+                    const color = isMine
+                      ? { bg: 'rgba(96,165,250,0.35)', border: 'rgba(96,165,250,0.8)', text: '#1e40af', darkText: '#93c5fd' }
+                      : RESERVATION_COLORS[idx % RESERVATION_COLORS.length]
 
                     return (
                       <div
                         key={res.id}
-                        className="absolute top-1 bottom-1 rounded-lg flex flex-col justify-center px-2 overflow-hidden transition-transform active:scale-[0.98]"
+                        className="absolute top-1 bottom-1 rounded-lg flex flex-col justify-center px-2 overflow-hidden"
                         style={{
                           left: `${leftPct}%`,
                           width: `${widthPct}%`,
                           backgroundColor: color.bg,
                           borderLeft: `3px solid ${color.border}`,
-                          backgroundImage: `repeating-linear-gradient(135deg, transparent, transparent 4px, ${color.border} 4px, ${color.border} 5px)`,
-                          backgroundSize: '8px 8px',
-                          backgroundPositionX: '0',
+                          backgroundImage: `repeating-linear-gradient(135deg, transparent, transparent 3px, ${color.border} 3px, ${color.border} 4px)`,
+                          backgroundSize: '7px 7px',
                         }}
                       >
-                        <div className="relative z-10 bg-white/60 dark:bg-black/30 rounded px-1 py-0.5 inline-block w-fit max-w-full">
+                        <div className="relative z-10 bg-white/70 dark:bg-black/40 rounded px-1 py-0.5 inline-block w-fit max-w-full">
                           <span className="text-[11px] font-bold truncate block" style={{ color: color.text }}>
                             {res.user_name}
                           </span>
                         </div>
-                        {widthPct > 15 && (
-                          <span className="relative z-10 text-[9px] mt-0.5 truncate opacity-70" style={{ color: color.text }}>
+                        {widthPct > 18 && (
+                          <span className="relative z-10 text-[9px] mt-0.5 truncate opacity-80" style={{ color: color.text }}>
                             {res.start_time}~{res.end_time}
                           </span>
                         )}
@@ -310,10 +328,8 @@ export default function RoomPage({ user }: Props) {
                   {selectedDate === new Date().toISOString().split('T')[0] && (() => {
                     const now = new Date()
                     const currentMinutes = now.getHours() * 60 + now.getMinutes()
-                    const startMinutes = 9 * 60
-                    const endMinutes = 18 * 60
-                    if (currentMinutes < startMinutes || currentMinutes > endMinutes) return null
-                    const pct = ((currentMinutes - startMinutes) / (endMinutes - startMinutes)) * 100
+                    if (currentMinutes < 540 || currentMinutes > 1080) return null
+                    const pct = ((currentMinutes - 540) / 540) * 100
                     return (
                       <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10" style={{ left: `${pct}%` }}>
                         <div className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-red-500" />
