@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 import { CARS, type CarReservation, type User } from '../lib/types'
 import Modal from '../components/Modal'
 import { toLocalDateStr } from '../lib/date'
+import { usePullToRefresh } from '../lib/usePullToRefresh'
+import PullIndicator from '../components/PullIndicator'
 
 interface Props { user: User }
 
@@ -42,8 +44,11 @@ export default function CarPage({ user }: Props) {
     return () => { supabase.removeChannel(channel) }
   }, [fetchReservations])
 
+  const { refreshing, pullY, onTouchStart, onTouchMove, onTouchEnd } = usePullToRefresh(fetchReservations)
+
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const firstDayOfWeek = new Date(year, month, 1).getDay()
+  const totalRows = Math.ceil((firstDayOfWeek + daysInMonth) / 7)
   const today = toLocalDateStr()
 
   const getReservation = (date: string, carName: string) =>
@@ -118,9 +123,16 @@ export default function CarPage({ user }: Props) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div
+      className="flex flex-col h-full"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+    >
+      <PullIndicator pullY={pullY} refreshing={refreshing} />
+
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 sticky top-0 bg-(--color-bg) z-10">
+      <div className="flex items-center justify-between px-4 py-3 bg-(--color-bg)">
         <button onClick={prevMonth} className="rounded-full p-2 hover:bg-(--color-border)">
           <ChevronLeft size={20} />
         </button>
@@ -140,8 +152,8 @@ export default function CarPage({ user }: Props) {
         ))}
       </div>
 
-      {/* Calendar */}
-      <div className="flex-1 overflow-y-auto px-2 pb-24">
+      {/* Calendar - flex fill, no scroll */}
+      <div className="flex-1 flex flex-col px-2 pb-20 min-h-0">
         {/* Day headers */}
         <div className="grid grid-cols-7 text-center text-xs font-medium text-(--color-text-secondary) mb-1">
           {['일','월','화','수','목','금','토'].map(d => (
@@ -149,8 +161,11 @@ export default function CarPage({ user }: Props) {
           ))}
         </div>
 
-        {/* Days grid */}
-        <div className="grid grid-cols-7 gap-px">
+        {/* Days grid - fills remaining space */}
+        <div
+          className="grid grid-cols-7 gap-px flex-1 min-h-0"
+          style={{ gridTemplateRows: `repeat(${totalRows}, 1fr)` }}
+        >
           {Array.from({ length: firstDayOfWeek }).map((_, i) => (
             <div key={`empty-${i}`} />
           ))}
@@ -164,7 +179,7 @@ export default function CarPage({ user }: Props) {
             return (
               <div
                 key={day}
-                className={`min-h-[72px] rounded-lg p-1 border text-[10px] ${
+                className={`rounded-lg p-1 border flex flex-col ${
                   isToday ? 'border-(--color-primary-light)' : 'border-(--color-border)'
                 } ${isPast ? 'opacity-50' : ''}`}
               >
@@ -173,7 +188,7 @@ export default function CarPage({ user }: Props) {
                 }`}>
                   {day}
                 </div>
-                <div className="flex flex-col gap-px">
+                <div className="flex flex-col gap-0.5 flex-1 min-h-0">
                   {CARS.map(car => {
                     const res = getReservation(dateStr, car.name)
                     const isMine = res?.user_id === user.id
@@ -182,7 +197,7 @@ export default function CarPage({ user }: Props) {
                         key={car.name}
                         onClick={() => handleCellClick(dateStr, car.name)}
                         disabled={isPast && !res}
-                        className="w-full rounded-sm px-0.5 py-px text-[9px] leading-tight truncate text-left transition-colors"
+                        className="w-full rounded-sm px-1 flex-1 min-h-0 text-[10px] leading-tight truncate text-left transition-colors flex items-center"
                         style={{
                           backgroundColor: res
                             ? isMine ? '#3b82f6' : car.color

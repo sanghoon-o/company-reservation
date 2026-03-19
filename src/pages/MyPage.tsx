@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Car, DoorOpen, Box, LogOut, Moon, Sun } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { CarReservation, RoomReservation, User } from '../lib/types'
 import Modal from '../components/Modal'
 import { toLocalDateStr } from '../lib/date'
+import { usePullToRefresh } from '../lib/usePullToRefresh'
+import PullIndicator from '../components/PullIndicator'
 
 interface Props {
   user: User
@@ -18,6 +20,7 @@ export default function MyPage({ user, onLogout, dark, onToggleDark }: Props) {
   const [items, setItems] = useState<AnyReservation[]>([])
   const [cancelTarget, setCancelTarget] = useState<AnyReservation | null>(null)
   const [loading, setLoading] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const fetchAll = useCallback(async () => {
     const [cars, rooms] = await Promise.all([
@@ -49,6 +52,8 @@ export default function MyPage({ user, onLogout, dark, onToggleDark }: Props) {
     const ch2 = supabase.channel('my_room').on('postgres_changes', { event: '*', schema: 'public', table: 'room_reservations' }, fetchAll).subscribe()
     return () => { supabase.removeChannel(ch1); supabase.removeChannel(ch2) }
   }, [fetchAll])
+
+  const { refreshing, pullY, onTouchStart, onTouchMove, onTouchEnd } = usePullToRefresh(fetchAll, scrollRef)
 
   const handleCancel = async () => {
     if (!cancelTarget) return
@@ -86,7 +91,8 @@ export default function MyPage({ user, onLogout, dark, onToggleDark }: Props) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+      <PullIndicator pullY={pullY} refreshing={refreshing} />
       {/* Header */}
       <div className="px-4 py-4 border-b border-(--color-border)">
         <div className="flex items-center justify-between mb-2">
@@ -106,7 +112,7 @@ export default function MyPage({ user, onLogout, dark, onToggleDark }: Props) {
       </div>
 
       {/* Reservation list */}
-      <div className="flex-1 overflow-y-auto pb-24 px-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto pb-24 px-4">
         {(() => {
           const today = toLocalDateStr()
           const upcoming = items.filter(i => i.date >= today)

@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 import { MEETING_ROOMS, type RoomReservation, type User } from '../lib/types'
 import Modal from '../components/Modal'
 import { toLocalDateStr } from '../lib/date'
+import { usePullToRefresh } from '../lib/usePullToRefresh'
+import PullIndicator from '../components/PullIndicator'
 
 interface Props { user: User }
 
@@ -65,6 +67,7 @@ export default function RoomPage({ user }: Props) {
   const [purpose, setPurpose] = useState('')
   const [loading, setLoading] = useState(false)
   const dateScrollRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const fetchReservations = useCallback(async () => {
     const { data } = await supabase
@@ -184,8 +187,11 @@ export default function RoomPage({ user }: Props) {
     if (next >= 0 && next < dates.length) setSelectedDate(dates[next])
   }
 
+  const { refreshing, pullY, onTouchStart, onTouchMove, onTouchEnd } = usePullToRefresh(fetchReservations, scrollRef)
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+      <PullIndicator pullY={pullY} refreshing={refreshing} />
       {/* Date header */}
       <div className="sticky top-0 z-10 bg-(--color-bg)">
         <div className="flex items-center justify-between px-4 py-3 border-b border-(--color-border)">
@@ -225,7 +231,7 @@ export default function RoomPage({ user }: Props) {
       </div>
 
       {/* Room cards */}
-      <div className="flex-1 overflow-y-auto pb-24 px-4 pt-4 space-y-5">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto pb-24 px-4 pt-4 space-y-5">
         {MEETING_ROOMS.map(room => {
           const info = ROOM_INFO[room]
           const roomRes = getRoomReservations(room)

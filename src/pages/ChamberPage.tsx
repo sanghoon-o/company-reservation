@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { CHAMBERS, type RoomReservation, type User } from '../lib/types'
 import Modal from '../components/Modal'
 import { toLocalDateStr } from '../lib/date'
+import { usePullToRefresh } from '../lib/usePullToRefresh'
+import PullIndicator from '../components/PullIndicator'
 
 interface Props { user: User }
 
@@ -36,6 +38,7 @@ export default function ChamberPage({ user }: Props) {
   const [endTime, setEndTime] = useState('')
   const [purpose, setPurpose] = useState('')
   const [loading, setLoading] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const fetchReservations = useCallback(async () => {
     const { data } = await supabase
@@ -136,8 +139,11 @@ export default function ChamberPage({ user }: Props) {
     if (next >= 0 && next < dates.length) setSelectedDate(dates[next])
   }
 
+  const { refreshing, pullY, onTouchStart, onTouchMove, onTouchEnd } = usePullToRefresh(fetchReservations, scrollRef)
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+      <PullIndicator pullY={pullY} refreshing={refreshing} />
       {/* Date header */}
       <div className="sticky top-0 z-10 bg-(--color-bg)">
         <div className="flex items-center justify-between px-4 py-3 border-b border-(--color-border)">
@@ -181,7 +187,7 @@ export default function ChamberPage({ user }: Props) {
       </div>
 
       {/* Time grid */}
-      <div className="flex-1 overflow-y-auto pb-24 px-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto pb-24 px-4">
         <div className="space-y-1">
           {SLOTS.map(time => {
             const res = getSlotReservation(time)
