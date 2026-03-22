@@ -260,7 +260,7 @@ export default function CarPage({ user }: Props) {
                 <div className="flex justify-between"><span className="text-(--color-text-secondary)">사유</span><span>{modal.reservation.reason}</span></div>
               )}
             </div>
-            {modal.reservation.user_id === user.id ? (
+            {modal.reservation.user_id === user.id && modal.reservation.date >= today ? (
               <div className="flex gap-2">
                 <button onClick={() => setModal(null)} className="flex-1 rounded-lg border border-(--color-border) py-3 text-sm font-medium text-(--color-text)">닫기</button>
                 <button onClick={handleCancel} disabled={loading} className="flex-1 rounded-lg bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-50">

@@ -22,7 +22,7 @@ function getEndTimeOptions(start: string) {
 function generateDates(): string[] {
   const dates: string[] = []
   const now = new Date()
-  for (let i = 0; i <= 30; i++) {
+  for (let i = -30; i <= 30; i++) {
     const d = new Date(now)
     d.setDate(d.getDate() + i)
     dates.push(toLocalDateStr(d))
@@ -32,7 +32,8 @@ function generateDates(): string[] {
 
 export default function ChamberPage({ user }: Props) {
   const dates = generateDates()
-  const [selectedDate, setSelectedDate] = useState(dates[0])
+  const todayStr = toLocalDateStr()
+  const [selectedDate, setSelectedDate] = useState(todayStr)
   const [reservations, setReservations] = useState<RoomReservation[]>([])
   const [modal, setModal] = useState<{ type: 'book' | 'detail'; slot: string; reservation?: RoomReservation } | null>(null)
   const [endTime, setEndTime] = useState('')
@@ -272,7 +273,7 @@ export default function ChamberPage({ user }: Props) {
               <div className="flex justify-between"><span className="text-(--color-text-secondary)">예약자</span><span className="font-medium">{modal.reservation.user_name}</span></div>
               <div className="flex justify-between"><span className="text-(--color-text-secondary)">목적</span><span>{modal.reservation.purpose}</span></div>
             </div>
-            {modal.reservation.user_id === user.id ? (
+            {modal.reservation.user_id === user.id && selectedDate >= todayStr ? (
               <div className="flex gap-2">
                 <button onClick={() => setModal(null)} className="flex-1 rounded-lg border border-(--color-border) py-3 text-sm font-medium text-(--color-text)">닫기</button>
                 <button onClick={handleCancel} disabled={loading} className="flex-1 rounded-lg bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-50">
