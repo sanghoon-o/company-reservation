@@ -32,6 +32,23 @@ export interface RoomReservation {
   created_at: string
 }
 
+export interface CarLog {
+  id: string
+  reservation_id: string
+  user_id: string
+  user_name: string
+  car_name: string
+  date: string
+  department: string | null
+  odo_before: number | null
+  odo_after: number | null
+  distance: number | null
+  commute_distance: number | null
+  business_distance: number | null
+  note: string | null
+  created_at: string
+}
+
 export type TabType = 'car' | 'room' | 'chamber' | 'my'
 
 export interface Car {

@@ -13,10 +13,16 @@ export default function CarPage({ user }: Props) {
   const [year, setYear] = useState(() => new Date().getFullYear())
   const [month, setMonth] = useState(() => new Date().getMonth())
   const [reservations, setReservations] = useState<CarReservation[]>([])
-  const [modal, setModal] = useState<{ type: 'book' | 'detail'; date: string; car: string; reservation?: CarReservation } | null>(null)
+  const [modal, setModal] = useState<{ type: 'book' | 'detail' | 'log'; date: string; car: string; reservation?: CarReservation } | null>(null)
   const [destination, setDestination] = useState('')
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(false)
+  const [logDepartment, setLogDepartment] = useState('')
+  const [logOdoBefore, setLogOdoBefore] = useState('')
+  const [logOdoAfter, setLogOdoAfter] = useState('')
+  const [logCommute, setLogCommute] = useState('')
+  const [logBusiness, setLogBusiness] = useState('')
+  const [logNote, setLogNote] = useState('')
 
   const fetchReservations = useCallback(async () => {
     const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
@@ -103,6 +109,47 @@ export default function CarPage({ user }: Props) {
         .eq('id', modal.reservation.id)
       await fetchReservations()
       setModal(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const openLogModal = () => {
+    if (!modal?.reservation) return
+    setLogDepartment('')
+    setLogOdoBefore('')
+    setLogOdoAfter('')
+    setLogCommute('')
+    setLogBusiness('')
+    setLogNote('')
+    setModal({ type: 'log', date: modal.date, car: modal.car, reservation: modal.reservation })
+  }
+
+  const handleSaveLog = async () => {
+    if (!modal?.reservation || !logOdoBefore || !logOdoAfter) return
+    setLoading(true)
+    try {
+      const distance = Number(logOdoAfter) - Number(logOdoBefore)
+      const { error } = await supabase.from('car_logs').insert({
+        reservation_id: modal.reservation.id,
+        user_id: user.id,
+        user_name: user.name,
+        car_name: modal.car,
+        date: modal.date,
+        department: logDepartment.trim() || null,
+        odo_before: Number(logOdoBefore),
+        odo_after: Number(logOdoAfter),
+        distance,
+        commute_distance: logCommute ? Number(logCommute) : null,
+        business_distance: logBusiness ? Number(logBusiness) : null,
+        note: logNote.trim() || null,
+      })
+      if (error) {
+        alert('저장 실패: ' + error.message)
+      } else {
+        alert('차량 일지가 저장되었습니다.')
+        setModal(null)
+      }
     } finally {
       setLoading(false)
     }
@@ -248,7 +295,21 @@ export default function CarPage({ user }: Props) {
       </Modal>
 
       {/* Detail Modal (예약 정보 + 본인이면 취소) */}
-      <Modal open={modal?.type === 'detail'} onClose={() => setModal(null)} title="예약 정보">
+      <Modal
+        open={modal?.type === 'detail'}
+        onClose={() => setModal(null)}
+        title="예약 정보"
+        headerRight={
+          modal?.reservation?.user_id === user.id ? (
+            <button
+              onClick={openLogModal}
+              className="text-xs px-2.5 py-1 rounded-lg bg-(--color-primary)/10 text-(--color-primary) font-medium"
+            >
+              일지 작성
+            </button>
+          ) : undefined
+        }
+      >
         {modal?.reservation && (
           <div className="space-y-4">
             <div className="space-y-2 text-sm">
@@ -270,6 +331,86 @@ export default function CarPage({ user }: Props) {
             ) : (
               <button onClick={() => setModal(null)} className="w-full rounded-lg border border-(--color-border) py-3 text-sm font-medium text-(--color-text)">닫기</button>
             )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Log Modal (차량 일지 작성) */}
+      <Modal open={modal?.type === 'log'} onClose={() => setModal(null)} title="차량 일지 작성">
+        {modal?.reservation && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2 rounded-lg bg-(--color-bg) p-3 text-sm">
+              <div>
+                <div className="text-[10px] text-(--color-text-secondary)">사용일자</div>
+                <div className="font-medium">{formatDate(modal.date)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-(--color-text-secondary)">차량</div>
+                <div className="font-medium">{modal.car}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-(--color-text-secondary)">성명</div>
+                <div className="font-medium">{user.name}</div>
+              </div>
+            </div>
+            <input
+              type="text"
+              placeholder="부서"
+              value={logDepartment}
+              onChange={e => setLogDepartment(e.target.value)}
+              className="w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-4 py-3 text-sm text-(--color-text) outline-none focus:border-(--color-primary-light)"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="number"
+                placeholder="주행 전 (km)"
+                value={logOdoBefore}
+                onChange={e => setLogOdoBefore(e.target.value)}
+                className="w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-4 py-3 text-sm text-(--color-text) outline-none focus:border-(--color-primary-light)"
+              />
+              <input
+                type="number"
+                placeholder="주행 후 (km)"
+                value={logOdoAfter}
+                onChange={e => setLogOdoAfter(e.target.value)}
+                className="w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-4 py-3 text-sm text-(--color-text) outline-none focus:border-(--color-primary-light)"
+              />
+            </div>
+            {logOdoBefore && logOdoAfter && (
+              <div className="rounded-lg bg-(--color-primary)/10 px-4 py-2.5 text-sm font-medium text-(--color-primary) text-center">
+                주행거리: {(Number(logOdoAfter) - Number(logOdoBefore)).toLocaleString()} km
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="number"
+                placeholder="출·퇴근용 (km)"
+                value={logCommute}
+                onChange={e => setLogCommute(e.target.value)}
+                className="w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-4 py-3 text-sm text-(--color-text) outline-none focus:border-(--color-primary-light)"
+              />
+              <input
+                type="number"
+                placeholder="일반 업무용 (km)"
+                value={logBusiness}
+                onChange={e => setLogBusiness(e.target.value)}
+                className="w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-4 py-3 text-sm text-(--color-text) outline-none focus:border-(--color-primary-light)"
+              />
+            </div>
+            <input
+              type="text"
+              placeholder="비고"
+              value={logNote}
+              onChange={e => setLogNote(e.target.value)}
+              className="w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-4 py-3 text-sm text-(--color-text) outline-none focus:border-(--color-primary-light)"
+            />
+            <button
+              onClick={handleSaveLog}
+              disabled={!logOdoBefore || !logOdoAfter || loading}
+              className="w-full rounded-lg bg-(--color-primary) py-3 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {loading ? '저장 중...' : '저장'}
+            </button>
           </div>
         )}
       </Modal>

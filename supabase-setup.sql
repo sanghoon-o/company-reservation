@@ -40,7 +40,25 @@ CREATE TABLE IF NOT EXISTS room_reservations (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. 인덱스 생성
+-- 4. car_logs 테이블 (차량 일지)
+CREATE TABLE IF NOT EXISTS car_logs (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  reservation_id UUID REFERENCES car_reservations(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL,
+  user_name TEXT NOT NULL,
+  car_name TEXT NOT NULL,
+  date DATE NOT NULL,
+  department TEXT,
+  odo_before NUMERIC,
+  odo_after NUMERIC,
+  distance NUMERIC,
+  commute_distance NUMERIC,
+  business_distance NUMERIC,
+  note TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. 인덱스 생성
 CREATE INDEX idx_car_reservations_date ON car_reservations(date, status);
 CREATE INDEX idx_car_reservations_user ON car_reservations(user_id);
 CREATE INDEX idx_room_reservations_date ON room_reservations(date, resource_type, status);
@@ -50,6 +68,7 @@ CREATE INDEX idx_room_reservations_user ON room_reservations(user_id);
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE car_reservations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE room_reservations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE car_logs ENABLE ROW LEVEL SECURITY;
 
 -- 6. RLS 정책 - 모든 사용자가 읽기/쓰기 가능 (사내 앱이므로)
 CREATE POLICY "Allow all access to users" ON users
@@ -59,6 +78,9 @@ CREATE POLICY "Allow all access to car_reservations" ON car_reservations
   FOR ALL USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all access to room_reservations" ON room_reservations
+  FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow all access to car_logs" ON car_logs
   FOR ALL USING (true) WITH CHECK (true);
 
 -- 7. Realtime 활성화

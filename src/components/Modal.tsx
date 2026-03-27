@@ -5,10 +5,11 @@ interface Props {
   open: boolean
   onClose: () => void
   title: string
+  headerRight?: React.ReactNode
   children: React.ReactNode
 }
 
-export default function Modal({ open, onClose, title, children }: Props) {
+export default function Modal({ open, onClose, title, headerRight, children }: Props) {
   useEffect(() => {
     if (open) document.body.style.overflow = 'hidden'
     else document.body.style.overflow = ''
@@ -24,7 +25,10 @@ export default function Modal({ open, onClose, title, children }: Props) {
         onClick={e => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-(--color-text)">{title}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-bold text-(--color-text)">{title}</h3>
+            {headerRight}
+          </div>
           <button onClick={onClose} className="rounded-full p-1 hover:bg-(--color-border)">
             <X size={20} className="text-(--color-text-secondary)" />
           </button>
