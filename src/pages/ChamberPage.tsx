@@ -211,7 +211,7 @@ export default function ChamberPage({ user }: Props) {
             if (res && !isStart) return null
 
             const span = res ? (
-              SLOTS.indexOf(res.end_time === '23:00' ? '23:00' : res.end_time) - SLOTS.indexOf(res.start_time)
+              (res.end_time === '23:00' ? SLOTS.length : SLOTS.indexOf(res.end_time)) - SLOTS.indexOf(res.start_time)
             ) : 1
 
             return (
