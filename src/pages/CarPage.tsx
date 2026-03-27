@@ -152,7 +152,13 @@ export default function CarPage({ user }: Props) {
           business_distance: logBusiness || '',
           note: logNote.trim(),
         })
-        await fetch(`${sheetUrl}?${params.toString()}`, { mode: 'no-cors' })
+        // img 태그로 GET 요청 (CORS 제약 없음)
+        await new Promise<void>((resolve) => {
+          const img = new Image()
+          img.onload = img.onerror = () => resolve()
+          img.src = `${sheetUrl}?${params.toString()}`
+          setTimeout(resolve, 5000)
+        })
       }
 
       // Supabase 백업 저장
