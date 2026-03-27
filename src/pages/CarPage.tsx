@@ -114,26 +114,56 @@ export default function CarPage({ user }: Props) {
     }
   }
 
+  const [logName, setLogName] = useState('')
+
   const openLogModal = () => {
     if (!modal?.reservation) return
+    setLogName(user.name)
     setLogDepartment('')
     setLogOdoBefore('')
     setLogOdoAfter('')
     setLogCommute('')
     setLogBusiness('')
-    setLogNote('')
+    setLogNote(modal.reservation.reason || '')
     setModal({ type: 'log', date: modal.date, car: modal.car, reservation: modal.reservation })
   }
 
   const handleSaveLog = async () => {
-    if (!modal?.reservation || !logOdoBefore || !logOdoAfter) return
+    if (!modal?.reservation || !logName.trim() || !logOdoBefore || !logOdoAfter) return
     setLoading(true)
     try {
       const distance = Number(logOdoAfter) - Number(logOdoBefore)
-      const { error } = await supabase.from('car_logs').insert({
+      const dateObj = new Date(modal.date + 'T00:00:00')
+      const days = ['일','월','화','수','목','금','토']
+      const dateDisplay = `${dateObj.getMonth()+1}/${dateObj.getDate()} (${days[dateObj.getDay()]})`
+
+      // Google Sheet 저장
+      const sheetUrl = import.meta.env.VITE_GOOGLE_SHEET_URL
+      if (sheetUrl) {
+        await fetch(sheetUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            date: dateDisplay,
+            car_name: modal.car,
+            department: logDepartment.trim(),
+            user_name: logName.trim(),
+            odo_before: Number(logOdoBefore),
+            odo_after: Number(logOdoAfter),
+            distance,
+            commute_distance: logCommute ? Number(logCommute) : '',
+            business_distance: logBusiness ? Number(logBusiness) : '',
+            note: logNote.trim(),
+          }),
+        })
+      }
+
+      // Supabase 백업 저장
+      await supabase.from('car_logs').insert({
         reservation_id: modal.reservation.id,
         user_id: user.id,
-        user_name: user.name,
+        user_name: logName.trim(),
         car_name: modal.car,
         date: modal.date,
         department: logDepartment.trim() || null,
@@ -143,13 +173,12 @@ export default function CarPage({ user }: Props) {
         commute_distance: logCommute ? Number(logCommute) : null,
         business_distance: logBusiness ? Number(logBusiness) : null,
         note: logNote.trim() || null,
-      })
-      if (error) {
-        alert('저장 실패: ' + error.message)
-      } else {
-        alert('차량 일지가 저장되었습니다.')
-        setModal(null)
-      }
+      }).catch(() => {})
+
+      alert('차량 일지가 저장되었습니다.')
+      setModal(null)
+    } catch (err) {
+      alert('저장 실패: ' + (err instanceof Error ? err.message : '알 수 없는 오류'))
     } finally {
       setLoading(false)
     }
@@ -339,7 +368,7 @@ export default function CarPage({ user }: Props) {
       <Modal open={modal?.type === 'log'} onClose={() => setModal(null)} title="차량 일지 작성">
         {modal?.reservation && (
           <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-2 rounded-lg bg-(--color-bg) p-3 text-sm">
+            <div className="grid grid-cols-2 gap-2 rounded-lg bg-(--color-bg) p-3 text-sm">
               <div>
                 <div className="text-[10px] text-(--color-text-secondary)">사용일자</div>
                 <div className="font-medium">{formatDate(modal.date)}</div>
@@ -348,18 +377,23 @@ export default function CarPage({ user }: Props) {
                 <div className="text-[10px] text-(--color-text-secondary)">차량</div>
                 <div className="font-medium">{modal.car}</div>
               </div>
-              <div>
-                <div className="text-[10px] text-(--color-text-secondary)">성명</div>
-                <div className="font-medium">{user.name}</div>
-              </div>
             </div>
-            <input
-              type="text"
-              placeholder="부서"
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                placeholder="성명 *"
+                value={logName}
+                onChange={e => setLogName(e.target.value)}
+                className="w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-4 py-3 text-sm text-(--color-text) outline-none focus:border-(--color-primary-light)"
+              />
+              <input
+                type="text"
+                placeholder="부서"
               value={logDepartment}
               onChange={e => setLogDepartment(e.target.value)}
               className="w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-4 py-3 text-sm text-(--color-text) outline-none focus:border-(--color-primary-light)"
-            />
+              />
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <input
                 type="number"
@@ -406,7 +440,7 @@ export default function CarPage({ user }: Props) {
             />
             <button
               onClick={handleSaveLog}
-              disabled={!logOdoBefore || !logOdoAfter || loading}
+              disabled={!logName.trim() || !logOdoBefore || !logOdoAfter || loading}
               className="w-full rounded-lg bg-(--color-primary) py-3 text-sm font-semibold text-white disabled:opacity-50"
             >
               {loading ? '저장 중...' : '저장'}
