@@ -140,23 +140,19 @@ export default function CarPage({ user }: Props) {
       // Google Sheet 저장
       const sheetUrl = import.meta.env.VITE_GOOGLE_SHEET_URL
       if (sheetUrl) {
-        await fetch(sheetUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            date: dateDisplay,
-            car_name: modal.car,
-            department: logDepartment.trim(),
-            user_name: logName.trim(),
-            odo_before: Number(logOdoBefore),
-            odo_after: Number(logOdoAfter),
-            distance,
-            commute_distance: logCommute ? Number(logCommute) : '',
-            business_distance: logBusiness ? Number(logBusiness) : '',
-            note: logNote.trim(),
-          }),
+        const params = new URLSearchParams({
+          date: dateDisplay,
+          car_name: modal.car,
+          department: logDepartment.trim(),
+          user_name: logName.trim(),
+          odo_before: logOdoBefore,
+          odo_after: logOdoAfter,
+          distance: String(distance),
+          commute_distance: logCommute || '',
+          business_distance: logBusiness || '',
+          note: logNote.trim(),
         })
+        await fetch(`${sheetUrl}?${params.toString()}`, { mode: 'no-cors' })
       }
 
       // Supabase 백업 저장
