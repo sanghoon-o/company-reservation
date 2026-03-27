@@ -40,6 +40,8 @@ export default function ChamberPage({ user }: Props) {
   const [purpose, setPurpose] = useState('')
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const chipScrollRef = useRef<HTMLDivElement>(null)
+  const chipMounted = useRef(false)
 
   const fetchReservations = useCallback(async () => {
     const { data } = await supabase
@@ -68,6 +70,16 @@ export default function ChamberPage({ user }: Props) {
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [fetchReservations, selectedDate])
+
+  useEffect(() => {
+    const container = chipScrollRef.current
+    if (!container) return
+    const el = container.querySelector('[data-active="true"]') as HTMLElement
+    if (!el) return
+    const left = el.offsetLeft - container.offsetWidth / 2 + el.offsetWidth / 2
+    container.scrollTo({ left, behavior: chipMounted.current ? 'smooth' : 'instant' })
+    chipMounted.current = true
+  }, [selectedDate])
 
   const getSlotReservation = (time: string) =>
     reservations.find(r =>
@@ -131,7 +143,7 @@ export default function ChamberPage({ user }: Props) {
   const formatDateChip = (d: string) => {
     const date = new Date(d + 'T00:00:00')
     const days = ['일','월','화','수','목','금','토']
-    return { day: date.getDate(), dow: days[date.getDay()], isWeekend: date.getDay() === 0 || date.getDay() === 6 }
+    return { day: date.getDate(), dow: days[date.getDay()], isWeekend: date.getDay() === 0 || date.getDay() === 6, month: date.getMonth() + 1 }
   }
 
   const navigateDate = (dir: -1 | 1) => {
@@ -158,14 +170,15 @@ export default function ChamberPage({ user }: Props) {
         </div>
 
         {/* Date chips */}
-        <div className="flex gap-1 overflow-x-auto px-3 py-2 scrollbar-hide border-b border-(--color-border)">
+        <div ref={chipScrollRef} className="flex gap-1 overflow-x-auto px-3 py-2 scrollbar-hide border-b border-(--color-border)">
           {dates.map(d => {
-            const { day, dow, isWeekend } = formatDateChip(d)
+            const { day, dow, isWeekend, month } = formatDateChip(d)
             const isActive = d === selectedDate
             const isToday = d === toLocalDateStr()
             return (
               <button
                 key={d}
+                data-active={isActive || undefined}
                 onClick={() => setSelectedDate(d)}
                 className={`flex flex-col items-center shrink-0 w-10 py-1.5 rounded-xl text-[11px] transition-all ${
                   isActive
@@ -176,7 +189,7 @@ export default function ChamberPage({ user }: Props) {
                 }`}
               >
                 <span className={`text-[10px] ${isWeekend && !isActive ? 'text-red-400' : ''}`}>{dow}</span>
-                <span className="text-sm font-bold">{day}</span>
+                <span className="text-sm font-bold">{day === 1 ? `${month}/${day}` : day}</span>
               </button>
             )
           })}
