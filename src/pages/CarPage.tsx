@@ -160,20 +160,22 @@ export default function CarPage({ user }: Props) {
       }
 
       // Supabase 백업 저장
-      await supabase.from('car_logs').insert({
-        reservation_id: modal.reservation.id,
-        user_id: user.id,
-        user_name: logName.trim(),
-        car_name: modal.car,
-        date: modal.date,
-        department: logDepartment.trim() || null,
-        odo_before: Number(logOdoBefore),
-        odo_after: Number(logOdoAfter),
-        distance,
-        commute_distance: logCommute ? Number(logCommute) : null,
-        business_distance: logBusiness ? Number(logBusiness) : null,
-        note: logNote.trim() || null,
-      }).catch(() => {})
+      try {
+        await supabase.from('car_logs').insert({
+          reservation_id: modal.reservation.id,
+          user_id: user.id,
+          user_name: logName.trim(),
+          car_name: modal.car,
+          date: modal.date,
+          department: logDepartment.trim() || null,
+          odo_before: Number(logOdoBefore),
+          odo_after: Number(logOdoAfter),
+          distance,
+          commute_distance: logCommute ? Number(logCommute) : null,
+          business_distance: logBusiness ? Number(logBusiness) : null,
+          note: logNote.trim() || null,
+        })
+      } catch { /* 테이블 미존재 시 무시 */ }
 
       alert('차량 일지가 저장되었습니다.')
       setModal(null)
