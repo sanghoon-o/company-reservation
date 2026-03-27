@@ -23,6 +23,14 @@ export default function CarPage({ user }: Props) {
   const [logCommute, setLogCommute] = useState('')
   const [logBusiness, setLogBusiness] = useState('')
   const [logNote, setLogNote] = useState('')
+  const [loggedReservations, setLoggedReservations] = useState<Set<string>>(new Set())
+
+  // 일지 작성 완료 여부 조회
+  useEffect(() => {
+    supabase.from('car_logs').select('reservation_id').then(({ data }) => {
+      if (data) setLoggedReservations(new Set(data.map((d: any) => d.reservation_id)))
+    })
+  }, [])
 
   const fetchReservations = useCallback(async () => {
     const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
@@ -142,9 +150,9 @@ export default function CarPage({ user }: Props) {
       if (sheetUrl) {
         const params = new URLSearchParams({
           date: dateDisplay,
-          car_name: modal.car,
           department: logDepartment.trim(),
           user_name: logName.trim(),
+          car_name: modal.car,
           odo_before: logOdoBefore,
           odo_after: logOdoAfter,
           distance: String(distance),
@@ -189,6 +197,7 @@ export default function CarPage({ user }: Props) {
         })
       } catch { /* 테이블 미존재 시 무시 */ }
 
+      setLoggedReservations(prev => new Set([...prev, modal.reservation!.id]))
       alert('차량 일지가 저장되었습니다.')
       setModal(null)
     } catch (err) {
@@ -344,12 +353,18 @@ export default function CarPage({ user }: Props) {
         title="예약 정보"
         headerRight={
           modal?.reservation?.user_id === user.id ? (
-            <button
-              onClick={openLogModal}
-              className="text-xs px-2.5 py-1 rounded-lg bg-(--color-primary)/10 text-(--color-primary) font-medium"
-            >
-              일지 작성
-            </button>
+            modal.reservation && loggedReservations.has(modal.reservation.id) ? (
+              <span className="text-xs px-2.5 py-1 rounded-lg bg-green-500/10 text-green-600 font-medium">
+                일지 작성 완료
+              </span>
+            ) : (
+              <button
+                onClick={openLogModal}
+                className="text-xs px-2.5 py-1 rounded-lg bg-(--color-primary)/10 text-(--color-primary) font-medium"
+              >
+                일지 작성
+              </button>
+            )
           ) : undefined
         }
       >
