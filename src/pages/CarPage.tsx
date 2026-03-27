@@ -146,7 +146,7 @@ export default function CarPage({ user }: Props) {
       const dateDisplay = `${dateObj.getMonth()+1}/${dateObj.getDate()} (${days[dateObj.getDay()]})`
 
       // Google Sheet 저장 (iframe으로 CORS 우회)
-      const sheetUrl = import.meta.env.VITE_GOOGLE_SHEET_URL || 'https://script.google.com/macros/s/AKfycbzkpx44BLTfb_xZPR1tn3dD1pLroZ94ulO3E6sNmeMdUbMDjxjFyeNQXzTWJ8AFtvV8/exec'
+      const sheetUrl = import.meta.env.VITE_GOOGLE_SHEET_URL || 'https://script.google.com/macros/s/AKfycbxfRjzO_TKTIDnij2hMmfqoNEVJio5gTyzA1udS5JlE1tk0VFcMS0BLh2jAWXg_iHWK/exec'
       if (sheetUrl) {
         const params = new URLSearchParams({
           date: dateDisplay,
