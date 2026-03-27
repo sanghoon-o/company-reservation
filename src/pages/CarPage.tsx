@@ -137,7 +137,7 @@ export default function CarPage({ user }: Props) {
       const days = ['일','월','화','수','목','금','토']
       const dateDisplay = `${dateObj.getMonth()+1}/${dateObj.getDate()} (${days[dateObj.getDay()]})`
 
-      // Google Sheet 저장
+      // Google Sheet 저장 (iframe으로 CORS 우회)
       const sheetUrl = import.meta.env.VITE_GOOGLE_SHEET_URL
       if (sheetUrl) {
         const params = new URLSearchParams({
@@ -152,13 +152,23 @@ export default function CarPage({ user }: Props) {
           business_distance: logBusiness || '',
           note: logNote.trim(),
         })
-        // img 태그로 GET 요청 (CORS 제약 없음)
         await new Promise<void>((resolve) => {
-          const img = new Image()
-          img.onload = img.onerror = () => resolve()
-          img.src = `${sheetUrl}?${params.toString()}`
-          setTimeout(resolve, 5000)
+          const iframe = document.createElement('iframe')
+          iframe.style.display = 'none'
+          document.body.appendChild(iframe)
+          iframe.src = `${sheetUrl}?${params.toString()}`
+          iframe.onload = () => {
+            resolve()
+            setTimeout(() => { try { document.body.removeChild(iframe) } catch {} }, 1000)
+          }
+          setTimeout(() => {
+            resolve()
+            try { document.body.removeChild(iframe) } catch {}
+          }, 5000)
         })
+      } else {
+        alert('Google Sheet URL이 설정되지 않았습니다.')
+        return
       }
 
       // Supabase 백업 저장
