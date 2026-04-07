@@ -207,6 +207,7 @@ export default function CarPage({ user }: Props) {
       const existing = carLogs[modal.reservation.id]
 
       // Google Sheet 저장 (Apps Script가 날짜+이름+차종으로 upsert, SHEET_URL 없으면 스킵)
+      console.log('[CarLog] SHEET_URL:', SHEET_URL)
       if (SHEET_URL) {
         const dateObj = new Date(modal.date + 'T00:00:00')
         const days = ['일','월','화','수','목','금','토']
@@ -224,20 +225,15 @@ export default function CarPage({ user }: Props) {
           business_distance: logBusiness || '',
           note: logNote.trim(),
         })
-        await new Promise<void>((resolve) => {
-          const iframe = document.createElement('iframe')
-          iframe.style.display = 'none'
-          document.body.appendChild(iframe)
-          iframe.src = `${SHEET_URL}?${params.toString()}`
-          iframe.onload = () => {
-            resolve()
-            setTimeout(() => { try { document.body.removeChild(iframe) } catch {} }, 1000)
-          }
-          setTimeout(() => {
-            resolve()
-            try { document.body.removeChild(iframe) } catch {}
-          }, 5000)
-        })
+        const saveUrl = `${SHEET_URL}?${params.toString()}`
+        console.log('[CarLog] Saving to sheet:', saveUrl)
+        try {
+          // no-cors fetch: 요청은 전송되지만 응답은 읽을 수 없음 (Apps Script 302 redirect 처리 OK)
+          await fetch(saveUrl, { method: 'GET', mode: 'no-cors' })
+          console.log('[CarLog] Sheet save request sent')
+        } catch (err) {
+          console.error('[CarLog] Sheet save fetch failed:', err)
+        }
       }
 
       // Supabase 저장 (upsert)
