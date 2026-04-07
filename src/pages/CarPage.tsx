@@ -157,7 +157,7 @@ export default function CarPage({ user }: Props) {
     const currentCar = modal.car
     setLoading(true)
 
-    // Google Sheet에서 기존 데이터 조회
+    // Google Sheet에서 기존 데이터 조회 (없으면 stub row 자동 생성)
     let sheetData: any = null
     try {
       const dateObj = new Date(currentDate + 'T00:00:00')
@@ -167,6 +167,7 @@ export default function CarPage({ user }: Props) {
       const params = new URLSearchParams({
         action: 'query',
         date: dateDisplay,
+        lookup_user_name: user.name,
         car_name: currentCar,
       })
       const result = await jsonpQuery(sheetUrl, params)
@@ -213,6 +214,7 @@ export default function CarPage({ user }: Props) {
         date: dateDisplay,
         department: logDepartment.trim(),
         user_name: logName.trim(),
+        lookup_user_name: user.name,
         car_name: modal.car,
         odo_before: logOdoBefore,
         odo_after: logOdoAfter || '',
