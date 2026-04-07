@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { CARS, type CarReservation, type User } from '../lib/types'
+import { CARS, type CarReservation, type CarLog, type User } from '../lib/types'
 import Modal from '../components/Modal'
 import { toLocalDateStr } from '../lib/date'
 import { usePullToRefresh } from '../lib/usePullToRefresh'
 import PullIndicator from '../components/PullIndicator'
+
+const SHEET_VIEW_URL = import.meta.env.VITE_GOOGLE_SHEET_VIEW_URL || ''
 
 interface Props { user: User }
 
@@ -23,12 +25,16 @@ export default function CarPage({ user }: Props) {
   const [logCommute, setLogCommute] = useState('')
   const [logBusiness, setLogBusiness] = useState('')
   const [logNote, setLogNote] = useState('')
-  const [loggedReservations, setLoggedReservations] = useState<Set<string>>(new Set())
+  const [carLogs, setCarLogs] = useState<Record<string, CarLog>>({})
 
-  // 일지 작성 완료 여부 조회
+  // 차량 일지 데이터 조회
   useEffect(() => {
-    supabase.from('car_logs').select('reservation_id').then(({ data }) => {
-      if (data) setLoggedReservations(new Set(data.map((d: any) => d.reservation_id)))
+    supabase.from('car_logs').select('*').then(({ data }) => {
+      if (data) {
+        const map: Record<string, CarLog> = {}
+        ;(data as CarLog[]).forEach(log => { map[log.reservation_id] = log })
+        setCarLogs(map)
+      }
     })
   }, [])
 
@@ -126,79 +132,89 @@ export default function CarPage({ user }: Props) {
 
   const openLogModal = () => {
     if (!modal?.reservation) return
-    setLogName(user.name)
-    setLogDepartment('')
-    setLogOdoBefore('')
-    setLogOdoAfter('')
-    setLogCommute('')
-    setLogBusiness('')
-    setLogNote(modal.reservation.reason || '')
+    const existing = carLogs[modal.reservation.id]
+    setLogName(existing?.user_name || user.name)
+    setLogDepartment(existing?.department || '')
+    setLogOdoBefore(existing?.odo_before != null ? String(existing.odo_before) : '')
+    setLogOdoAfter(existing?.odo_after != null ? String(existing.odo_after) : '')
+    setLogCommute(existing?.commute_distance != null ? String(existing.commute_distance) : '')
+    setLogBusiness(existing?.business_distance != null ? String(existing.business_distance) : '')
+    setLogNote(existing?.note || modal.reservation.reason || '')
     setModal({ type: 'log', date: modal.date, car: modal.car, reservation: modal.reservation })
   }
 
   const handleSaveLog = async () => {
-    if (!modal?.reservation || !logName.trim() || !logOdoBefore || !logOdoAfter) return
+    if (!modal?.reservation || !logName.trim() || !logOdoBefore) return
     setLoading(true)
     try {
-      const distance = Number(logOdoAfter) - Number(logOdoBefore)
+      const hasOdoAfter = !!logOdoAfter
+      const distance = hasOdoAfter ? Number(logOdoAfter) - Number(logOdoBefore) : null
+      const existing = carLogs[modal.reservation.id]
+
+      // Google Sheet 저장 (Apps Script가 날짜+이름+차종으로 upsert)
       const dateObj = new Date(modal.date + 'T00:00:00')
       const days = ['일','월','화','수','목','금','토']
       const dateDisplay = `${dateObj.getMonth()+1}/${dateObj.getDate()} (${days[dateObj.getDay()]})`
 
-      // Google Sheet 저장 (iframe으로 CORS 우회)
       const sheetUrl = import.meta.env.VITE_GOOGLE_SHEET_URL || 'https://script.google.com/macros/s/AKfycbxfRjzO_TKTIDnij2hMmfqoNEVJio5gTyzA1udS5JlE1tk0VFcMS0BLh2jAWXg_iHWK/exec'
-      if (sheetUrl) {
-        const params = new URLSearchParams({
-          date: dateDisplay,
-          department: logDepartment.trim(),
-          user_name: logName.trim(),
-          car_name: modal.car,
-          odo_before: logOdoBefore,
-          odo_after: logOdoAfter,
-          distance: String(distance),
-          commute_distance: logCommute || '',
-          business_distance: logBusiness || '',
-          note: logNote.trim(),
-        })
-        await new Promise<void>((resolve) => {
-          const iframe = document.createElement('iframe')
-          iframe.style.display = 'none'
-          document.body.appendChild(iframe)
-          iframe.src = `${sheetUrl}?${params.toString()}`
-          iframe.onload = () => {
-            resolve()
-            setTimeout(() => { try { document.body.removeChild(iframe) } catch {} }, 1000)
-          }
-          setTimeout(() => {
-            resolve()
-            try { document.body.removeChild(iframe) } catch {}
-          }, 5000)
-        })
-      } else {
-        alert('Google Sheet URL이 설정되지 않았습니다.')
-        return
+      const params = new URLSearchParams({
+        date: dateDisplay,
+        department: logDepartment.trim(),
+        user_name: logName.trim(),
+        car_name: modal.car,
+        odo_before: logOdoBefore,
+        odo_after: logOdoAfter || '',
+        distance: distance != null ? String(distance) : '',
+        commute_distance: logCommute || '',
+        business_distance: logBusiness || '',
+        note: logNote.trim(),
+      })
+      await new Promise<void>((resolve) => {
+        const iframe = document.createElement('iframe')
+        iframe.style.display = 'none'
+        document.body.appendChild(iframe)
+        iframe.src = `${sheetUrl}?${params.toString()}`
+        iframe.onload = () => {
+          resolve()
+          setTimeout(() => { try { document.body.removeChild(iframe) } catch {} }, 1000)
+        }
+        setTimeout(() => {
+          resolve()
+          try { document.body.removeChild(iframe) } catch {}
+        }, 5000)
+      })
+
+      // Supabase 저장 (upsert)
+      const logData = {
+        reservation_id: modal.reservation.id,
+        user_id: user.id,
+        user_name: logName.trim(),
+        car_name: modal.car,
+        date: modal.date,
+        department: logDepartment.trim() || null,
+        odo_before: Number(logOdoBefore),
+        odo_after: hasOdoAfter ? Number(logOdoAfter) : null,
+        distance,
+        commute_distance: logCommute ? Number(logCommute) : null,
+        business_distance: logBusiness ? Number(logBusiness) : null,
+        note: logNote.trim() || null,
       }
 
-      // Supabase 백업 저장
       try {
-        await supabase.from('car_logs').insert({
-          reservation_id: modal.reservation.id,
-          user_id: user.id,
-          user_name: logName.trim(),
-          car_name: modal.car,
-          date: modal.date,
-          department: logDepartment.trim() || null,
-          odo_before: Number(logOdoBefore),
-          odo_after: Number(logOdoAfter),
-          distance,
-          commute_distance: logCommute ? Number(logCommute) : null,
-          business_distance: logBusiness ? Number(logBusiness) : null,
-          note: logNote.trim() || null,
-        })
+        let saved: CarLog | null = null
+        if (existing?.id) {
+          const { data } = await supabase.from('car_logs').update(logData).eq('id', existing.id).select().single()
+          saved = data as CarLog | null
+        } else {
+          const { data } = await supabase.from('car_logs').insert(logData).select().single()
+          saved = data as CarLog | null
+        }
+        if (saved) {
+          setCarLogs(prev => ({ ...prev, [modal.reservation!.id]: saved! }))
+        }
       } catch { /* 테이블 미존재 시 무시 */ }
 
-      setLoggedReservations(prev => new Set([...prev, modal.reservation!.id]))
-      alert('차량 일지가 저장되었습니다.')
+      alert(hasOdoAfter ? '차량 일지가 저장되었습니다.' : '주행 전 데이터가 저장되었습니다.')
       setModal(null)
     } catch (err) {
       alert('저장 실패: ' + (err instanceof Error ? err.message : '알 수 없는 오류'))
@@ -353,10 +369,21 @@ export default function CarPage({ user }: Props) {
         title="예약 정보"
         headerRight={
           modal?.reservation?.user_id === user.id ? (
-            modal.reservation && loggedReservations.has(modal.reservation.id) ? (
-              <span className="text-xs px-2.5 py-1 rounded-lg bg-green-500/10 text-green-600 font-medium">
+            modal.reservation && carLogs[modal.reservation.id]?.odo_after != null ? (
+              <a
+                href={SHEET_VIEW_URL || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => {
+                  if (!SHEET_VIEW_URL) {
+                    e.preventDefault()
+                    alert('시트 URL이 설정되지 않았습니다.')
+                  }
+                }}
+                className="text-xs px-2.5 py-1 rounded-lg bg-green-500/10 text-green-600 font-medium underline"
+              >
                 일지 작성 완료
-              </span>
+              </a>
             ) : (
               <button
                 onClick={openLogModal}
@@ -469,7 +496,7 @@ export default function CarPage({ user }: Props) {
             />
             <button
               onClick={handleSaveLog}
-              disabled={!logName.trim() || !logOdoBefore || !logOdoAfter || loading}
+              disabled={!logName.trim() || !logOdoBefore || loading}
               className="w-full rounded-lg bg-(--color-primary) py-3 text-sm font-semibold text-white disabled:opacity-50"
             >
               {loading ? '저장 중...' : '저장'}
