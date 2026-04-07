@@ -7,6 +7,7 @@ import { toLocalDateStr } from '../lib/date'
 import { usePullToRefresh } from '../lib/usePullToRefresh'
 import PullIndicator from '../components/PullIndicator'
 
+const SHEET_URL = import.meta.env.VITE_GOOGLE_SHEET_URL
 const SHEET_VIEW_URL = import.meta.env.VITE_GOOGLE_SHEET_VIEW_URL || ''
 
 // JSONP helper - Apps Script에서 데이터 읽기 (CORS 우회)
@@ -163,14 +164,13 @@ export default function CarPage({ user }: Props) {
       const dateObj = new Date(currentDate + 'T00:00:00')
       const days = ['일','월','화','수','목','금','토']
       const dateDisplay = `${dateObj.getMonth()+1}/${dateObj.getDate()} (${days[dateObj.getDay()]})`
-      const sheetUrl = import.meta.env.VITE_GOOGLE_SHEET_URL || 'https://script.google.com/macros/s/AKfycbxfRjzO_TKTIDnij2hMmfqoNEVJio5gTyzA1udS5JlE1tk0VFcMS0BLh2jAWXg_iHWK/exec'
       const params = new URLSearchParams({
         action: 'query',
         date: dateDisplay,
         user_name: user.name,
         car_name: currentCar,
       })
-      const result = await jsonpQuery(sheetUrl, params)
+      const result = await jsonpQuery(SHEET_URL, params)
       if (result?.ok && result.data) sheetData = result.data
     } catch (err) {
       console.warn('Sheet query failed:', err)
@@ -209,7 +209,6 @@ export default function CarPage({ user }: Props) {
       const days = ['일','월','화','수','목','금','토']
       const dateDisplay = `${dateObj.getMonth()+1}/${dateObj.getDate()} (${days[dateObj.getDay()]})`
 
-      const sheetUrl = import.meta.env.VITE_GOOGLE_SHEET_URL || 'https://script.google.com/macros/s/AKfycbxfRjzO_TKTIDnij2hMmfqoNEVJio5gTyzA1udS5JlE1tk0VFcMS0BLh2jAWXg_iHWK/exec'
       const params = new URLSearchParams({
         date: dateDisplay,
         department: logDepartment.trim(),
@@ -226,7 +225,7 @@ export default function CarPage({ user }: Props) {
         const iframe = document.createElement('iframe')
         iframe.style.display = 'none'
         document.body.appendChild(iframe)
-        iframe.src = `${sheetUrl}?${params.toString()}`
+        iframe.src = `${SHEET_URL}?${params.toString()}`
         iframe.onload = () => {
           resolve()
           setTimeout(() => { try { document.body.removeChild(iframe) } catch {} }, 1000)
