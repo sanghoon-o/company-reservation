@@ -9,7 +9,10 @@ import PullIndicator from '../components/PullIndicator'
 
 // 공백/개행 방어: Vercel 입력 시 textarea 개행 섞여 들어오는 경우 제거
 const SHEET_URL = (import.meta.env.VITE_GOOGLE_SHEET_URL || '').replace(/\s+/g, '')
-const SHEET_VIEW_URL = (import.meta.env.VITE_GOOGLE_SHEET_VIEW_URL || '').replace(/\s+/g, '')
+// SHEET_VIEW_URL은 공개 가능한 구글 시트 공유 링크이므로 하드코딩 fallback 허용
+// (env var가 비어있거나 모바일 PWA가 옛 번들을 캐싱해도 항상 작동하도록)
+const SHEET_VIEW_URL_FALLBACK = 'https://docs.google.com/spreadsheets/d/1qF5d0H8Rfay7tFNDJnIz02pausfrQzrc-ehQczxwtq4/edit?gid=0#gid=0'
+const SHEET_VIEW_URL = ((import.meta.env.VITE_GOOGLE_SHEET_VIEW_URL || '').replace(/\s+/g, '')) || SHEET_VIEW_URL_FALLBACK
 
 // JSONP helper - Apps Script에서 데이터 읽기 (CORS 우회)
 function jsonpQuery(baseUrl: string, params: URLSearchParams): Promise<any> {
