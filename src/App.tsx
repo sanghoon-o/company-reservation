@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useUser } from './lib/useUser'
 import { useDarkMode } from './lib/useDarkMode'
+import { toLocalDateStr } from './lib/date'
 import type { TabType } from './lib/types'
 import LoginModal from './components/LoginModal'
 import TabBar from './components/TabBar'
@@ -9,7 +10,10 @@ import RoomPage from './pages/RoomPage'
 import ChamberPage from './pages/ChamberPage'
 import MyPage from './pages/MyPage'
 
-const NOTICE_KEY = 'notice_dismissed_v1'
+// 공지 노출 기간: 2026-04-08 ~ 2026-04-14 (7일간), 하루 한 번만 노출
+const NOTICE_START = '2026-04-08'
+const NOTICE_END = '2026-04-14'
+const NOTICE_LAST_SHOWN_KEY = 'notice_last_shown_v2'
 
 export default function App() {
   const { user, login, logout } = useUser()
@@ -18,12 +22,15 @@ export default function App() {
   const [showNotice, setShowNotice] = useState(false)
 
   useEffect(() => {
-    if (!localStorage.getItem(NOTICE_KEY)) setShowNotice(true)
+    const today = toLocalDateStr()
+    if (today < NOTICE_START || today > NOTICE_END) return
+    if (localStorage.getItem(NOTICE_LAST_SHOWN_KEY) === today) return
+    setShowNotice(true)
   }, [])
 
   const dismissNotice = () => {
     setShowNotice(false)
-    localStorage.setItem(NOTICE_KEY, 'true')
+    localStorage.setItem(NOTICE_LAST_SHOWN_KEY, toLocalDateStr())
   }
 
   if (!user) {
