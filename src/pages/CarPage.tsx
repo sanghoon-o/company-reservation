@@ -167,7 +167,7 @@ export default function CarPage({ user }: Props) {
       const params = new URLSearchParams({
         action: 'query',
         date: dateDisplay,
-        lookup_user_name: user.name,
+        user_name: user.name,
         car_name: currentCar,
       })
       const result = await jsonpQuery(sheetUrl, params)
@@ -213,8 +213,7 @@ export default function CarPage({ user }: Props) {
       const params = new URLSearchParams({
         date: dateDisplay,
         department: logDepartment.trim(),
-        user_name: logName.trim(),
-        lookup_user_name: user.name,
+        user_name: user.name,
         car_name: modal.car,
         odo_before: logOdoBefore,
         odo_after: logOdoAfter || '',
