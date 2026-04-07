@@ -153,6 +153,10 @@ export default function CarPage({ user }: Props) {
 
   const openLogModal = async () => {
     if (!modal?.reservation) return
+    if (!SHEET_URL) {
+      alert('VITE_GOOGLE_SHEET_URL 환경변수가 설정되지 않았습니다.')
+      return
+    }
     const reservation = modal.reservation
     const currentDate = modal.date
     const currentCar = modal.car
@@ -198,6 +202,10 @@ export default function CarPage({ user }: Props) {
 
   const handleSaveLog = async () => {
     if (!modal?.reservation || !logName.trim() || !logOdoBefore) return
+    if (!SHEET_URL) {
+      alert('VITE_GOOGLE_SHEET_URL 환경변수가 설정되지 않았습니다. .env / Vercel 환경변수를 확인하세요.')
+      return
+    }
     setLoading(true)
     try {
       const hasOdoAfter = !!logOdoAfter
