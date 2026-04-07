@@ -154,7 +154,7 @@ export default function CarPage({ user }: Props) {
   const openLogModal = async () => {
     if (!modal?.reservation) return
     if (!SHEET_URL) {
-      alert('VITE_GOOGLE_SHEET_URL 환경변수가 설정되지 않았습니다.')
+      alert(`VITE_GOOGLE_SHEET_URL 미설정\n현재 값: [${JSON.stringify(SHEET_URL)}]\nimport.meta.env keys: ${Object.keys(import.meta.env).filter(k => k.startsWith('VITE_')).join(', ')}`)
       return
     }
     const reservation = modal.reservation
@@ -203,7 +203,7 @@ export default function CarPage({ user }: Props) {
   const handleSaveLog = async () => {
     if (!modal?.reservation || !logName.trim() || !logOdoBefore) return
     if (!SHEET_URL) {
-      alert('VITE_GOOGLE_SHEET_URL 환경변수가 설정되지 않았습니다. .env / Vercel 환경변수를 확인하세요.')
+      alert(`VITE_GOOGLE_SHEET_URL 미설정\n현재 값: [${JSON.stringify(SHEET_URL)}]\nimport.meta.env keys: ${Object.keys(import.meta.env).filter(k => k.startsWith('VITE_')).join(', ')}`)
       return
     }
     setLoading(true)
