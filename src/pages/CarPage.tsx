@@ -9,6 +9,26 @@ import PullIndicator from '../components/PullIndicator'
 
 const SHEET_VIEW_URL = import.meta.env.VITE_GOOGLE_SHEET_VIEW_URL || ''
 
+// JSONP helper - Apps Script에서 데이터 읽기 (CORS 우회)
+function jsonpQuery(baseUrl: string, params: URLSearchParams): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const callbackName = 'jsonpCb_' + Date.now() + '_' + Math.floor(Math.random() * 100000)
+    const script = document.createElement('script')
+    let timer: number
+    const cleanup = () => {
+      delete (window as any)[callbackName]
+      try { document.head.removeChild(script) } catch {}
+      window.clearTimeout(timer)
+    }
+    ;(window as any)[callbackName] = (data: any) => { cleanup(); resolve(data) }
+    script.onerror = () => { cleanup(); reject(new Error('JSONP failed')) }
+    timer = window.setTimeout(() => { cleanup(); reject(new Error('JSONP timeout')) }, 10000)
+    params.set('callback', callbackName)
+    script.src = `${baseUrl}?${params.toString()}`
+    document.head.appendChild(script)
+  })
+}
+
 interface Props { user: User }
 
 export default function CarPage({ user }: Props) {
@@ -130,17 +150,49 @@ export default function CarPage({ user }: Props) {
 
   const [logName, setLogName] = useState('')
 
-  const openLogModal = () => {
+  const openLogModal = async () => {
     if (!modal?.reservation) return
-    const existing = carLogs[modal.reservation.id]
-    setLogName(existing?.user_name || user.name)
-    setLogDepartment(existing?.department || '')
-    setLogOdoBefore(existing?.odo_before != null ? String(existing.odo_before) : '')
-    setLogOdoAfter(existing?.odo_after != null ? String(existing.odo_after) : '')
-    setLogCommute(existing?.commute_distance != null ? String(existing.commute_distance) : '')
-    setLogBusiness(existing?.business_distance != null ? String(existing.business_distance) : '')
-    setLogNote(existing?.note || modal.reservation.reason || '')
-    setModal({ type: 'log', date: modal.date, car: modal.car, reservation: modal.reservation })
+    const reservation = modal.reservation
+    const currentDate = modal.date
+    const currentCar = modal.car
+    setLoading(true)
+
+    // Google Sheet에서 기존 데이터 조회
+    let sheetData: any = null
+    try {
+      const dateObj = new Date(currentDate + 'T00:00:00')
+      const days = ['일','월','화','수','목','금','토']
+      const dateDisplay = `${dateObj.getMonth()+1}/${dateObj.getDate()} (${days[dateObj.getDay()]})`
+      const sheetUrl = import.meta.env.VITE_GOOGLE_SHEET_URL || 'https://script.google.com/macros/s/AKfycbxfRjzO_TKTIDnij2hMmfqoNEVJio5gTyzA1udS5JlE1tk0VFcMS0BLh2jAWXg_iHWK/exec'
+      const params = new URLSearchParams({
+        action: 'query',
+        date: dateDisplay,
+        car_name: currentCar,
+      })
+      const result = await jsonpQuery(sheetUrl, params)
+      if (result?.ok && result.data) sheetData = result.data
+    } catch (err) {
+      console.warn('Sheet query failed:', err)
+    }
+
+    // Fallback: Supabase 캐시
+    const cached = carLogs[reservation.id]
+    const pick = (sheetVal: any, cacheVal: any, fallback = '') => {
+      if (sheetVal !== '' && sheetVal != null) return String(sheetVal)
+      if (cacheVal != null) return String(cacheVal)
+      return fallback
+    }
+
+    setLogName(pick(sheetData?.user_name, cached?.user_name, user.name))
+    setLogDepartment(pick(sheetData?.department, cached?.department))
+    setLogOdoBefore(pick(sheetData?.odo_before, cached?.odo_before))
+    setLogOdoAfter(pick(sheetData?.odo_after, cached?.odo_after))
+    setLogCommute(pick(sheetData?.commute_distance, cached?.commute_distance))
+    setLogBusiness(pick(sheetData?.business_distance, cached?.business_distance))
+    setLogNote(pick(sheetData?.note, cached?.note, reservation.reason || ''))
+
+    setLoading(false)
+    setModal({ type: 'log', date: currentDate, car: currentCar, reservation })
   }
 
   const handleSaveLog = async () => {
@@ -387,9 +439,10 @@ export default function CarPage({ user }: Props) {
             ) : (
               <button
                 onClick={openLogModal}
-                className="text-xs px-2.5 py-1 rounded-lg bg-(--color-primary)/10 text-(--color-primary) font-medium"
+                disabled={loading}
+                className="text-xs px-2.5 py-1 rounded-lg bg-(--color-primary)/10 text-(--color-primary) font-medium disabled:opacity-50"
               >
-                일지 작성
+                {loading ? '로딩...' : '일지 작성'}
               </button>
             )
           ) : undefined
