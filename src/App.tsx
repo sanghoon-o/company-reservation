@@ -64,7 +64,7 @@ export default function App() {
                 <strong className="text-(--color-primary)"> '차량 일지'</strong> 작성을 바로 할 수 있습니다.
               </p>
               <p className="text-(--color-text-secondary)">
-                2026년 3월 30일 이전은 기존 장부를 이용하시면 됩니다.
+                2026년 4월 8일 이전은 기존 장부를 이용하시면 됩니다.
               </p>
               <p>
                 이후부터 <strong>에델예약</strong> 앱에서 차량 일지 작성하시면 됩니다.
