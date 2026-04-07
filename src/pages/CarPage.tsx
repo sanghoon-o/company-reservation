@@ -247,7 +247,7 @@ export default function CarPage({ user }: Props) {
         })
       }
 
-      // Supabase 저장 (upsert)
+      // Supabase 저장 (upsert) + Optimistic UI 업데이트
       const logData = {
         reservation_id: modal.reservation.id,
         user_id: user.id,
@@ -263,19 +263,30 @@ export default function CarPage({ user }: Props) {
         note: logNote.trim() || null,
       }
 
+      // Optimistic 업데이트: Supabase 성공 여부와 무관하게 UI 즉시 반영
+      // (시트 저장은 이미 성공했으므로, UI에 '일지 작성 완료'를 즉시 표시)
+      const optimisticLog: CarLog = {
+        id: existing?.id || `local_${Date.now()}`,
+        created_at: existing?.created_at || new Date().toISOString(),
+        ...logData,
+      }
+      setCarLogs(prev => ({ ...prev, [modal.reservation!.id]: optimisticLog }))
+      console.log('[CarLog] Optimistic state updated:', optimisticLog)
+
+      // Supabase 영속화 (best-effort, 실패해도 UI는 유지)
       try {
-        let saved: CarLog | null = null
         if (existing?.id) {
-          const { data } = await supabase.from('car_logs').update(logData).eq('id', existing.id).select().single()
-          saved = data as CarLog | null
+          const { data, error } = await supabase.from('car_logs').update(logData).eq('id', existing.id).select().single()
+          if (error) console.warn('[CarLog] Supabase update error:', error)
+          if (data) setCarLogs(prev => ({ ...prev, [modal.reservation!.id]: data as CarLog }))
         } else {
-          const { data } = await supabase.from('car_logs').insert(logData).select().single()
-          saved = data as CarLog | null
+          const { data, error } = await supabase.from('car_logs').insert(logData).select().single()
+          if (error) console.warn('[CarLog] Supabase insert error:', error)
+          if (data) setCarLogs(prev => ({ ...prev, [modal.reservation!.id]: data as CarLog }))
         }
-        if (saved) {
-          setCarLogs(prev => ({ ...prev, [modal.reservation!.id]: saved! }))
-        }
-      } catch { /* 테이블 미존재 시 무시 */ }
+      } catch (err) {
+        console.warn('[CarLog] Supabase exception:', err)
+      }
 
       alert(hasOdoAfter ? '차량 일지가 저장되었습니다.' : '주행 전 데이터가 저장되었습니다.')
       setModal(null)
