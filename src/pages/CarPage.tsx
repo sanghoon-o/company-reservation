@@ -153,31 +153,29 @@ export default function CarPage({ user }: Props) {
 
   const openLogModal = async () => {
     if (!modal?.reservation) return
-    if (!SHEET_URL) {
-      alert(`VITE_GOOGLE_SHEET_URL 미설정\n현재 값: [${JSON.stringify(SHEET_URL)}]\nimport.meta.env keys: ${Object.keys(import.meta.env).filter(k => k.startsWith('VITE_')).join(', ')}`)
-      return
-    }
     const reservation = modal.reservation
     const currentDate = modal.date
     const currentCar = modal.car
     setLoading(true)
 
-    // Google Sheet에서 기존 데이터 조회 (없으면 stub row 자동 생성)
+    // Google Sheet에서 기존 데이터 조회 (SHEET_URL 없으면 스킵)
     let sheetData: any = null
-    try {
-      const dateObj = new Date(currentDate + 'T00:00:00')
-      const days = ['일','월','화','수','목','금','토']
-      const dateDisplay = `${dateObj.getMonth()+1}/${dateObj.getDate()} (${days[dateObj.getDay()]})`
-      const params = new URLSearchParams({
-        action: 'query',
-        date: dateDisplay,
-        user_name: user.name,
-        car_name: currentCar,
-      })
-      const result = await jsonpQuery(SHEET_URL, params)
-      if (result?.ok && result.data) sheetData = result.data
-    } catch (err) {
-      console.warn('Sheet query failed:', err)
+    if (SHEET_URL) {
+      try {
+        const dateObj = new Date(currentDate + 'T00:00:00')
+        const days = ['일','월','화','수','목','금','토']
+        const dateDisplay = `${dateObj.getMonth()+1}/${dateObj.getDate()} (${days[dateObj.getDay()]})`
+        const params = new URLSearchParams({
+          action: 'query',
+          date: dateDisplay,
+          user_name: user.name,
+          car_name: currentCar,
+        })
+        const result = await jsonpQuery(SHEET_URL, params)
+        if (result?.ok && result.data) sheetData = result.data
+      } catch (err) {
+        console.warn('Sheet query failed:', err)
+      }
     }
 
     // Fallback: Supabase 캐시
@@ -202,47 +200,45 @@ export default function CarPage({ user }: Props) {
 
   const handleSaveLog = async () => {
     if (!modal?.reservation || !logName.trim() || !logOdoBefore) return
-    if (!SHEET_URL) {
-      alert(`VITE_GOOGLE_SHEET_URL 미설정\n현재 값: [${JSON.stringify(SHEET_URL)}]\nimport.meta.env keys: ${Object.keys(import.meta.env).filter(k => k.startsWith('VITE_')).join(', ')}`)
-      return
-    }
     setLoading(true)
     try {
       const hasOdoAfter = !!logOdoAfter
       const distance = hasOdoAfter ? Number(logOdoAfter) - Number(logOdoBefore) : null
       const existing = carLogs[modal.reservation.id]
 
-      // Google Sheet 저장 (Apps Script가 날짜+이름+차종으로 upsert)
-      const dateObj = new Date(modal.date + 'T00:00:00')
-      const days = ['일','월','화','수','목','금','토']
-      const dateDisplay = `${dateObj.getMonth()+1}/${dateObj.getDate()} (${days[dateObj.getDay()]})`
+      // Google Sheet 저장 (Apps Script가 날짜+이름+차종으로 upsert, SHEET_URL 없으면 스킵)
+      if (SHEET_URL) {
+        const dateObj = new Date(modal.date + 'T00:00:00')
+        const days = ['일','월','화','수','목','금','토']
+        const dateDisplay = `${dateObj.getMonth()+1}/${dateObj.getDate()} (${days[dateObj.getDay()]})`
 
-      const params = new URLSearchParams({
-        date: dateDisplay,
-        department: logDepartment.trim(),
-        user_name: user.name,
-        car_name: modal.car,
-        odo_before: logOdoBefore,
-        odo_after: logOdoAfter || '',
-        distance: distance != null ? String(distance) : '',
-        commute_distance: logCommute || '',
-        business_distance: logBusiness || '',
-        note: logNote.trim(),
-      })
-      await new Promise<void>((resolve) => {
-        const iframe = document.createElement('iframe')
-        iframe.style.display = 'none'
-        document.body.appendChild(iframe)
-        iframe.src = `${SHEET_URL}?${params.toString()}`
-        iframe.onload = () => {
-          resolve()
-          setTimeout(() => { try { document.body.removeChild(iframe) } catch {} }, 1000)
-        }
-        setTimeout(() => {
-          resolve()
-          try { document.body.removeChild(iframe) } catch {}
-        }, 5000)
-      })
+        const params = new URLSearchParams({
+          date: dateDisplay,
+          department: logDepartment.trim(),
+          user_name: user.name,
+          car_name: modal.car,
+          odo_before: logOdoBefore,
+          odo_after: logOdoAfter || '',
+          distance: distance != null ? String(distance) : '',
+          commute_distance: logCommute || '',
+          business_distance: logBusiness || '',
+          note: logNote.trim(),
+        })
+        await new Promise<void>((resolve) => {
+          const iframe = document.createElement('iframe')
+          iframe.style.display = 'none'
+          document.body.appendChild(iframe)
+          iframe.src = `${SHEET_URL}?${params.toString()}`
+          iframe.onload = () => {
+            resolve()
+            setTimeout(() => { try { document.body.removeChild(iframe) } catch {} }, 1000)
+          }
+          setTimeout(() => {
+            resolve()
+            try { document.body.removeChild(iframe) } catch {}
+          }, 5000)
+        })
+      }
 
       // Supabase 저장 (upsert)
       const logData = {
