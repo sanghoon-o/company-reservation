@@ -206,7 +206,7 @@ export default function CarPage({ user }: Props) {
       const distance = hasOdoAfter ? Number(logOdoAfter) - Number(logOdoBefore) : null
       const existing = carLogs[modal.reservation.id]
 
-      // Google Sheet 저장 (Apps Script가 날짜+이름+차종으로 upsert, SHEET_URL 없으면 스킵)
+      // Google Sheet 저장 - iframe 방식 (검증됨: 이전 버전에서 실제 row 저장 동작 확인)
       console.log('[CarLog] SHEET_URL:', SHEET_URL)
       if (SHEET_URL) {
         const dateObj = new Date(modal.date + 'T00:00:00')
@@ -227,13 +227,24 @@ export default function CarPage({ user }: Props) {
         })
         const saveUrl = `${SHEET_URL}?${params.toString()}`
         console.log('[CarLog] Saving to sheet:', saveUrl)
-        try {
-          // no-cors fetch: 요청은 전송되지만 응답은 읽을 수 없음 (Apps Script 302 redirect 처리 OK)
-          await fetch(saveUrl, { method: 'GET', mode: 'no-cors' })
-          console.log('[CarLog] Sheet save request sent')
-        } catch (err) {
-          console.error('[CarLog] Sheet save fetch failed:', err)
-        }
+        await new Promise<void>((resolve) => {
+          const iframe = document.createElement('iframe')
+          iframe.style.display = 'none'
+          document.body.appendChild(iframe)
+          let done = false
+          const finish = () => {
+            if (done) return
+            done = true
+            console.log('[CarLog] Sheet save iframe done')
+            resolve()
+            setTimeout(() => { try { document.body.removeChild(iframe) } catch {} }, 500)
+          }
+          iframe.onload = finish
+          iframe.onerror = finish
+          iframe.src = saveUrl
+          // 안전장치: 8초 후 강제 진행
+          setTimeout(finish, 8000)
+        })
       }
 
       // Supabase 저장 (upsert)
