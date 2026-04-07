@@ -7,8 +7,9 @@ import { toLocalDateStr } from '../lib/date'
 import { usePullToRefresh } from '../lib/usePullToRefresh'
 import PullIndicator from '../components/PullIndicator'
 
-const SHEET_URL = import.meta.env.VITE_GOOGLE_SHEET_URL
-const SHEET_VIEW_URL = import.meta.env.VITE_GOOGLE_SHEET_VIEW_URL || ''
+// 공백/개행 방어: Vercel 입력 시 textarea 개행 섞여 들어오는 경우 제거
+const SHEET_URL = (import.meta.env.VITE_GOOGLE_SHEET_URL || '').replace(/\s+/g, '')
+const SHEET_VIEW_URL = (import.meta.env.VITE_GOOGLE_SHEET_VIEW_URL || '').replace(/\s+/g, '')
 
 // JSONP helper - Apps Script에서 데이터 읽기 (CORS 우회)
 function jsonpQuery(baseUrl: string, params: URLSearchParams): Promise<any> {
