@@ -172,6 +172,7 @@ export default function CarPage({ user }: Props) {
 
     // Google Sheet에서 기존 데이터 조회 (SHEET_URL 없으면 스킵)
     let sheetData: any = null
+    let lastOdoAfter: string = ''
     if (SHEET_URL) {
       try {
         const dateDisplay = formatSheetDate(currentDate)
@@ -182,7 +183,25 @@ export default function CarPage({ user }: Props) {
           car_name: currentCar,
         })
         const result = await jsonpQuery(SHEET_URL, params)
-        if (result?.ok && result.data) sheetData = result.data
+        if (result?.ok && result.data) {
+          sheetData = result.data
+        } else {
+          // 미발견 시: 같은 차종의 가장 최근 row의 odo_after를 조회해서
+          // 새 일지의 '주행 전' 기본값으로 사용
+          try {
+            const lastParams = new URLSearchParams({
+              action: 'last_odo',
+              car_name: currentCar,
+            })
+            const lastResult = await jsonpQuery(SHEET_URL, lastParams)
+            const v = lastResult?.data?.odo_after
+            if (lastResult?.ok && v != null && v !== '') {
+              lastOdoAfter = String(v)
+            }
+          } catch (err) {
+            console.warn('[CarLog] last_odo lookup failed:', err)
+          }
+        }
       } catch (err) {
         console.warn('Sheet query failed:', err)
       }
@@ -198,7 +217,8 @@ export default function CarPage({ user }: Props) {
 
     setLogName(pick(sheetData?.user_name, cached?.user_name, user.name))
     setLogDepartment(pick(sheetData?.department, cached?.department))
-    setLogOdoBefore(pick(sheetData?.odo_before, cached?.odo_before))
+    // 주행 전: 시트 매칭값 → 캐시 → 같은 차종 최근 odo_after fallback
+    setLogOdoBefore(pick(sheetData?.odo_before, cached?.odo_before, lastOdoAfter))
     setLogOdoAfter(pick(sheetData?.odo_after, cached?.odo_after))
     setLogCommute(pick(sheetData?.commute_distance, cached?.commute_distance))
     setLogBusiness(pick(sheetData?.business_distance, cached?.business_distance))
