@@ -14,6 +14,14 @@ const SHEET_URL = (import.meta.env.VITE_GOOGLE_SHEET_URL || '').replace(/\s+/g, 
 const SHEET_VIEW_URL_FALLBACK = 'https://docs.google.com/spreadsheets/d/1qF5d0H8Rfay7tFNDJnIz02pausfrQzrc-ehQczxwtq4/edit?gid=0#gid=0'
 const SHEET_VIEW_URL = ((import.meta.env.VITE_GOOGLE_SHEET_VIEW_URL || '').replace(/\s+/g, '')) || SHEET_VIEW_URL_FALLBACK
 
+// 시트에서 사용할 날짜 표시 형식: YYYY.M.D (요일)
+// (Apps Script upsert lookup 키로도 사용되므로 저장/조회에서 동일 형식 필수)
+function formatSheetDate(dateStr: string): string {
+  const dateObj = new Date(dateStr + 'T00:00:00')
+  const days = ['일','월','화','수','목','금','토']
+  return `${dateObj.getFullYear()}.${dateObj.getMonth()+1}.${dateObj.getDate()} (${days[dateObj.getDay()]})`
+}
+
 // JSONP helper - Apps Script에서 데이터 읽기 (CORS 우회)
 function jsonpQuery(baseUrl: string, params: URLSearchParams): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -166,9 +174,7 @@ export default function CarPage({ user }: Props) {
     let sheetData: any = null
     if (SHEET_URL) {
       try {
-        const dateObj = new Date(currentDate + 'T00:00:00')
-        const days = ['일','월','화','수','목','금','토']
-        const dateDisplay = `${dateObj.getMonth()+1}/${dateObj.getDate()} (${days[dateObj.getDay()]})`
+        const dateDisplay = formatSheetDate(currentDate)
         const params = new URLSearchParams({
           action: 'query',
           date: dateDisplay,
@@ -213,9 +219,7 @@ export default function CarPage({ user }: Props) {
       // Google Sheet 저장 - iframe 방식 (검증됨: 이전 버전에서 실제 row 저장 동작 확인)
       console.log('[CarLog] SHEET_URL:', SHEET_URL)
       if (SHEET_URL) {
-        const dateObj = new Date(modal.date + 'T00:00:00')
-        const days = ['일','월','화','수','목','금','토']
-        const dateDisplay = `${dateObj.getMonth()+1}/${dateObj.getDate()} (${days[dateObj.getDay()]})`
+        const dateDisplay = formatSheetDate(modal.date)
 
         const params = new URLSearchParams({
           date: dateDisplay,
