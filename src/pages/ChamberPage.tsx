@@ -19,35 +19,29 @@ function getEndTimeOptions(start: string) {
   return SLOTS.slice(idx + 1).concat(['23:00'])
 }
 
-function generateDates(): string[] {
-  const dates: string[] = []
-  const now = new Date()
-  for (let i = -30; i <= 30; i++) {
-    const d = new Date(now)
-    d.setDate(d.getDate() + i)
-    dates.push(toLocalDateStr(d))
-  }
-  return dates
-}
-
 export default function ChamberPage({ user }: Props) {
-  const dates = generateDates()
-  const todayStr = toLocalDateStr()
-  const [selectedDate, setSelectedDate] = useState(todayStr)
+  const today = toLocalDateStr()
+  const [year, setYear] = useState(() => new Date().getFullYear())
+  const [month, setMonth] = useState(() => new Date().getMonth())
+  const [selectedDate, setSelectedDate] = useState(today)
   const [reservations, setReservations] = useState<RoomReservation[]>([])
   const [modal, setModal] = useState<{ type: 'book' | 'detail'; slot: string; reservation?: RoomReservation } | null>(null)
   const [endTime, setEndTime] = useState('')
   const [purpose, setPurpose] = useState('')
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const chipScrollRef = useRef<HTMLDivElement>(null)
-  const chipMounted = useRef(false)
 
+  /* ── 월 단위 fetch ── */
   const fetchReservations = useCallback(async () => {
+    const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
+    const lastDay = new Date(year, month + 1, 0).getDate()
+    const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
     const { data } = await supabase
       .from('room_reservations')
       .select('*')
-      .eq('date', selectedDate)
+      .gte('date', startDate)
+      .lte('date', endDate)
       .eq('resource_type', 'chamber')
       .eq('status', 'confirmed')
     if (data) {
@@ -58,31 +52,42 @@ export default function ChamberPage({ user }: Props) {
       }))
       setReservations(normalized)
     }
-  }, [selectedDate])
+  }, [year, month])
 
   useEffect(() => { fetchReservations() }, [fetchReservations])
 
   useEffect(() => {
-    const channel = supabase.channel(`chamber_rt_${selectedDate}`)
+    const channel = supabase.channel(`chamber_rt_${year}_${month}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'room_reservations' }, () => {
         fetchReservations()
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [fetchReservations, selectedDate])
+  }, [fetchReservations, year, month])
 
-  useEffect(() => {
-    const container = chipScrollRef.current
-    if (!container) return
-    const el = container.querySelector('[data-active="true"]') as HTMLElement
-    if (!el) return
-    const left = el.offsetLeft - container.offsetWidth / 2 + el.offsetWidth / 2
-    container.scrollTo({ left, behavior: chipMounted.current ? 'smooth' : 'instant' })
-    chipMounted.current = true
-  }, [selectedDate])
+  /* ── 월 이동 ── */
+  const prevMonth = () => {
+    if (month === 0) { setYear(y => y - 1); setMonth(11) }
+    else setMonth(m => m - 1)
+  }
+  const nextMonth = () => {
+    if (month === 11) { setYear(y => y + 1); setMonth(0) }
+    else setMonth(m => m + 1)
+  }
+
+  /* ── 캘린더 계산 ── */
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const firstDayOfWeek = new Date(year, month, 1).getDay()
+  const totalRows = Math.ceil((firstDayOfWeek + daysInMonth) / 7)
+
+  const makeDateStr = (day: number) =>
+    `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+
+  /* ── 선택된 날짜의 예약만 필터 ── */
+  const dayReservations = reservations.filter(r => r.date === selectedDate)
 
   const getSlotReservation = (time: string) =>
-    reservations.find(r =>
+    dayReservations.find(r =>
       r.resource_name === CHAMBERS[0] && r.start_time <= time && r.end_time > time
     )
 
@@ -136,20 +141,8 @@ export default function ChamberPage({ user }: Props) {
 
   const formatDateHeader = (d: string) => {
     const date = new Date(d + 'T00:00:00')
-    const days = ['일요일','월요일','화요일','수요일','목요일','금요일','토요일']
-    return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일 · ${days[date.getDay()]}`
-  }
-
-  const formatDateChip = (d: string) => {
-    const date = new Date(d + 'T00:00:00')
     const days = ['일','월','화','수','목','금','토']
-    return { day: date.getDate(), dow: days[date.getDay()], isWeekend: date.getDay() === 0 || date.getDay() === 6, month: date.getMonth() + 1 }
-  }
-
-  const navigateDate = (dir: -1 | 1) => {
-    const idx = dates.indexOf(selectedDate)
-    const next = idx + dir
-    if (next >= 0 && next < dates.length) setSelectedDate(dates[next])
+    return `${date.getMonth() + 1}월 ${date.getDate()}일 (${days[date.getDay()]})`
   }
 
   const { refreshing, pullY, onTouchStart, onTouchMove, onTouchEnd } = usePullToRefresh(fetchReservations, scrollRef)
@@ -157,50 +150,104 @@ export default function ChamberPage({ user }: Props) {
   return (
     <div className="flex flex-col h-full" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
       <PullIndicator pullY={pullY} refreshing={refreshing} />
-      {/* Date header */}
-      <div className="sticky top-0 z-10 bg-(--color-bg)">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-(--color-border)">
-          <button onClick={() => navigateDate(-1)} className="rounded-full p-1.5 hover:bg-(--color-border)">
-            <ChevronLeft size={18} />
-          </button>
-          <span className="text-sm font-bold text-(--color-text)">{formatDateHeader(selectedDate)}</span>
-          <button onClick={() => navigateDate(1)} className="rounded-full p-1.5 hover:bg-(--color-border)">
-            <ChevronRight size={18} />
-          </button>
+
+      {/* ── Month header ── */}
+      <div className="flex items-center justify-between px-4 py-3 bg-(--color-bg) border-b border-(--color-border)">
+        <button onClick={prevMonth} className="rounded-full p-2 hover:bg-(--color-border)">
+          <ChevronLeft size={20} />
+        </button>
+        <h2 className="text-lg font-bold">{year}년 {month + 1}월</h2>
+        <button onClick={nextMonth} className="rounded-full p-2 hover:bg-(--color-border)">
+          <ChevronRight size={20} />
+        </button>
+      </div>
+
+      {/* ── Monthly calendar grid ── */}
+      <div className="px-2 pt-1 pb-2 bg-(--color-bg) border-b border-(--color-border)">
+        {/* Day-of-week headers */}
+        <div className="grid grid-cols-7 text-center text-xs font-medium text-(--color-text-secondary) mb-1">
+          {['일','월','화','수','목','금','토'].map(d => (
+            <div key={d} className={`py-1 ${d === '일' ? 'text-red-400' : d === '토' ? 'text-blue-400' : ''}`}>{d}</div>
+          ))}
         </div>
 
-        {/* Date chips */}
-        <div ref={chipScrollRef} className="flex gap-1 overflow-x-auto px-3 py-2 scrollbar-hide border-b border-(--color-border)">
-          {dates.map(d => {
-            const { day, dow, isWeekend, month } = formatDateChip(d)
-            const isActive = d === selectedDate
-            const isToday = d === toLocalDateStr()
+        <div
+          className="grid grid-cols-7 gap-px"
+          style={{ gridTemplateRows: `repeat(${totalRows}, minmax(40px, 1fr))` }}
+        >
+          {/* Empty leading cells */}
+          {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+            <div key={`empty-${i}`} />
+          ))}
+
+          {/* Day cells */}
+          {Array.from({ length: daysInMonth }).map((_, i) => {
+            const day = i + 1
+            const dateStr = makeDateStr(day)
+            const isPast = dateStr < today
+            const isToday = dateStr === today
+            const isSelected = dateStr === selectedDate
+            const dayOfWeek = new Date(year, month, day).getDay()
+            const dayRes = reservations.filter(r => r.date === dateStr)
+            const totalHours = dayRes.reduce((sum, r) => {
+              const sh = parseInt(r.start_time)
+              const eh = r.end_time === '23:00' ? 23 : parseInt(r.end_time)
+              return sum + (eh - sh)
+            }, 0)
+
             return (
               <button
-                key={d}
-                data-active={isActive || undefined}
-                onClick={() => setSelectedDate(d)}
-                className={`flex flex-col items-center shrink-0 w-10 py-1.5 rounded-xl text-[11px] transition-all ${
-                  isActive
-                    ? 'bg-(--color-primary) text-white shadow-md'
+                key={day}
+                onClick={() => setSelectedDate(dateStr)}
+                className={`relative rounded-lg p-1 border flex flex-col items-center transition-all ${
+                  isSelected
+                    ? 'border-(--color-primary) bg-(--color-primary)/10 shadow-sm'
                     : isToday
-                      ? 'bg-(--color-primary)/10 text-(--color-primary-light)'
-                      : 'text-(--color-text-secondary) hover:bg-(--color-border)'
-                }`}
+                      ? 'border-(--color-primary-light) bg-(--color-primary)/5'
+                      : 'border-transparent hover:bg-(--color-surface)'
+                } ${isPast ? 'opacity-50' : ''}`}
               >
-                <span className={`text-[10px] ${isWeekend && !isActive ? 'text-red-400' : ''}`}>{dow}</span>
-                <span className="text-sm font-bold">{day === 1 ? `${month}/${day}` : day}</span>
+                <span className={`text-xs font-medium ${
+                  isSelected ? 'text-(--color-primary)' :
+                  dayOfWeek === 0 ? 'text-red-500' : dayOfWeek === 6 ? 'text-blue-500' : 'text-(--color-text)'
+                }`}>
+                  {day}
+                </span>
+                {/* Reservation indicator */}
+                {dayRes.length > 0 && (
+                  <div className="mt-0.5 flex flex-col gap-px w-full px-0.5">
+                    {totalHours >= 12 ? (
+                      <div className="h-1.5 rounded-full bg-red-400/70 w-full" />
+                    ) : dayRes.length > 0 ? (
+                      <div className="h-1.5 rounded-full bg-blue-400/70 w-full" />
+                    ) : null}
+                  </div>
+                )}
               </button>
             )
           })}
         </div>
 
-        <div className="px-4 py-2 text-xs text-(--color-text-secondary)">
-          24시간 운영 · 1시간 단위
+        {/* Legend */}
+        <div className="flex items-center gap-3 px-2 pt-1.5 text-[10px] text-(--color-text-secondary)">
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-1.5 rounded-full bg-blue-400/70" />
+            예약 있음
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-1.5 rounded-full bg-red-400/70" />
+            12시간 이상
+          </span>
         </div>
       </div>
 
-      {/* Time grid */}
+      {/* ── Selected date detail ── */}
+      <div className="px-4 py-2 flex items-center justify-between bg-(--color-bg)">
+        <span className="text-sm font-bold text-(--color-text)">{formatDateHeader(selectedDate)}</span>
+        <span className="text-xs text-(--color-text-secondary)">24시간 운영 · 1시간 단위</span>
+      </div>
+
+      {/* ── Time slot grid ── */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto pb-24 px-4">
         <div className="space-y-1">
           {SLOTS.map(time => {
@@ -286,7 +333,7 @@ export default function ChamberPage({ user }: Props) {
               <div className="flex justify-between"><span className="text-(--color-text-secondary)">예약자</span><span className="font-medium">{modal.reservation.user_name}</span></div>
               <div className="flex justify-between"><span className="text-(--color-text-secondary)">목적</span><span>{modal.reservation.purpose}</span></div>
             </div>
-            {modal.reservation.user_id === user.id && selectedDate >= todayStr ? (
+            {modal.reservation.user_id === user.id && selectedDate >= today ? (
               <div className="flex gap-2">
                 <button onClick={() => setModal(null)} className="flex-1 rounded-lg border border-(--color-border) py-3 text-sm font-medium text-(--color-text)">닫기</button>
                 <button onClick={handleCancel} disabled={loading} className="flex-1 rounded-lg bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-50">
