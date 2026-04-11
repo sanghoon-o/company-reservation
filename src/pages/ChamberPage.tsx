@@ -9,6 +9,10 @@ import PullIndicator from '../components/PullIndicator'
 
 interface Props { user: User }
 
+// 챔버 공지: 4월 말까지, 하루 1회
+const CHAMBER_NOTICE_END = '2026-04-30'
+const CHAMBER_NOTICE_KEY = 'chamber_notice_last_shown'
+
 const SLOTS: string[] = []
 for (let h = 0; h < 23; h++) {
   SLOTS.push(`${String(h).padStart(2, '0')}:00`)
@@ -30,6 +34,18 @@ export default function ChamberPage({ user }: Props) {
   const [purpose, setPurpose] = useState('')
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [showNotice, setShowNotice] = useState(false)
+
+  useEffect(() => {
+    if (today > CHAMBER_NOTICE_END) return
+    if (localStorage.getItem(CHAMBER_NOTICE_KEY) === today) return
+    setShowNotice(true)
+  }, [today])
+
+  const dismissNotice = () => {
+    setShowNotice(false)
+    localStorage.setItem(CHAMBER_NOTICE_KEY, toLocalDateStr())
+  }
 
   /* ── 월 단위 fetch ── */
   const fetchReservations = useCallback(async () => {
@@ -346,6 +362,38 @@ export default function ChamberPage({ user }: Props) {
           </div>
         )}
       </Modal>
+
+      {/* 챔버 공지 팝업 */}
+      {showNotice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={dismissNotice}>
+          <div className="w-full max-w-sm rounded-2xl bg-(--color-surface) p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xl">📢</span>
+              <h3 className="text-lg font-bold text-(--color-text)">챔버 예약 안내</h3>
+            </div>
+            <div className="space-y-3 text-sm text-(--color-text) leading-relaxed">
+              <p>
+                챔버 예약 전 <strong className="text-(--color-primary)">위성사업센터에 사전 문의</strong> 부탁드립니다.
+              </p>
+              <p>
+                4월 마지막 주(4/27~4/30)에 <strong className="text-(--color-primary)">DCU 시험 일정</strong>이 확정되어 있습니다.
+              </p>
+              <p className="text-(--color-text-secondary)">
+                (3/16 기술회의부터 보고된 일정)
+              </p>
+              <p>
+                해당 기간에 예약이 있으신 분은 <strong>일정 조정</strong>을 부탁드립니다.
+              </p>
+            </div>
+            <button
+              onClick={dismissNotice}
+              className="w-full mt-5 rounded-lg bg-(--color-primary) py-3 text-sm font-semibold text-white"
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
