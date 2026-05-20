@@ -1,4 +1,4 @@
-const CACHE_NAME = 'reservation-v13';
+const CACHE_NAME = 'reservation-v14';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -24,6 +24,12 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Cross-origin 요청은 SW가 가로채지 않고 브라우저가 직접 처리하도록 통과
+  // (Google Apps Script JSONP 같은 외부 script tag fetch가 SW의 redirect/opaque 처리로
+  //  망가지는 문제 방지)
+  const reqUrl = new URL(event.request.url);
+  if (reqUrl.origin !== self.location.origin) return;
+
   // Network first - 항상 최신 버전 우선
   event.respondWith(
     fetch(event.request)
