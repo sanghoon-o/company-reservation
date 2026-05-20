@@ -37,13 +37,34 @@ function jsonpRequest(baseUrl: string, params: URLSearchParams, timeoutMs = 1000
   })
 }
 
-// 시트의 '사용부서' 셀 업데이트
+// iframe fallback - 옛 SW가 cross-origin script tag를 가로채 JSONP 실패하는 환경 대응
+// (차량 일지와 동일한 방식, 응답 확인은 불가하지만 시트 업데이트는 됨)
+function iframeFireAndForget(saveUrl: string): Promise<void> {
+  return new Promise((resolve) => {
+    const iframe = document.createElement('iframe')
+    iframe.style.display = 'none'
+    document.body.appendChild(iframe)
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      resolve()
+      setTimeout(() => { try { document.body.removeChild(iframe) } catch { /* noop */ } }, 500)
+    }
+    iframe.onload = finish
+    iframe.onerror = finish
+    iframe.src = saveUrl
+    setTimeout(finish, 8000)
+  })
+}
+
+// 시트의 '사용부서' 셀 업데이트 - JSONP 우선 → 실패 시 iframe fallback
 async function updateSheetDepartment(payload: {
   instrument_no: string | null
   english_name: string | null
   model: string | null
   user_name: string
-}): Promise<{ ok: boolean; error?: string; row?: number }> {
+}): Promise<{ ok: boolean; error?: string; row?: number; fallback?: boolean }> {
   if (!SHEET_URL) return { ok: false, error: 'SHEET_URL env var 미설정' }
   const params = new URLSearchParams({
     action: 'use',
@@ -52,15 +73,19 @@ async function updateSheetDepartment(payload: {
     model: payload.model || '',
     user_name: payload.user_name,
   })
+
+  // 1차: JSONP (응답 확인 가능)
   try {
     const result = await jsonpRequest(SHEET_URL, params)
-    console.log('[instrument sheet] response:', result)
+    console.log('[instrument sheet] JSONP response:', result)
     return result
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.warn('[instrument sheet] request failed:', msg)
-    return { ok: false, error: msg }
+    console.warn('[instrument sheet] JSONP failed, falling back to iframe:', err)
   }
+
+  // 2차: iframe (응답 확인 불가, fire-and-forget) - 옛 PWA SW 환경 대응
+  await iframeFireAndForget(`${SHEET_URL}?${params.toString()}`)
+  return { ok: true, fallback: true }
 }
 
 const formatKoreanDate = (iso: string) => {
