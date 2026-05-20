@@ -1,10 +1,17 @@
-const CACHE_NAME = 'reservation-v10';
+const CACHE_NAME = 'reservation-v11';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(['/']))
   );
+});
+
+// 클라이언트가 명시적으로 skipWaiting을 요청하면 즉시 활성화
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', (event) => {
