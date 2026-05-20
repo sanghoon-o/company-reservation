@@ -11,10 +11,10 @@ import ChamberPage from './pages/ChamberPage'
 import InstrumentPage from './pages/InstrumentPage'
 import MyPage from './pages/MyPage'
 
-// 공지 노출 기간: 2026-04-08 ~ 2026-04-14 (7일간), 하루 한 번만 노출
-const NOTICE_START = '2026-04-08'
-const NOTICE_END = '2026-04-14'
-const NOTICE_LAST_SHOWN_KEY = 'notice_last_shown_v2'
+// 공지 노출 기간: 2026-05-20 ~ 2026-05-26 (7일간), 하루 한 번만 노출
+const NOTICE_START = '2026-05-20'
+const NOTICE_END = '2026-05-26'
+const NOTICE_LAST_SHOWN_KEY = 'notice_last_shown_v3'
 
 export default function App() {
   const { user, login, logout } = useUser()
@@ -62,15 +62,16 @@ export default function App() {
             </div>
             <div className="space-y-3 text-sm text-(--color-text) leading-relaxed">
               <p>
-                주행 후 <strong className="text-(--color-primary)">'예약정보'</strong>를 클릭하면
-                <strong className="text-(--color-primary)"> '차량 일지'</strong> 작성을 바로 할 수 있습니다.
+                <strong className="text-(--color-primary)">계측기 관리</strong> 메뉴가 새로 추가됐습니다.
+                계측기 사용 시작 시 <strong>'사용'</strong>을 눌러주시면 관리대장에 자동 기록됩니다.
               </p>
               <p className="text-(--color-text-secondary)">
-                2026년 4월 8일 이전은 기존 장부를 이용하시면 됩니다.
+                ※ 화면이 새 메뉴(계측기)가 안 보이면 아래 절차로 한 번만 갱신해 주세요. 이후엔 자동 갱신됩니다.
               </p>
-              <p>
-                이후부터 <strong>에델예약</strong> 앱에서 차량 일지 작성하시면 됩니다.
-              </p>
+              <div className="rounded-lg bg-(--color-bg) p-3 space-y-1.5 text-xs text-(--color-text-secondary)">
+                <p>• <strong className="text-(--color-text)">PC 브라우저</strong>: Ctrl + Shift + R</p>
+                <p>• <strong className="text-(--color-text)">모바일 PWA</strong>: 홈화면 아이콘 길게 → 앱 정보 → 저장공간 → 저장공간 지우기 → 다시 열기</p>
+              </div>
             </div>
             <button
               onClick={dismissNotice}
