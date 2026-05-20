@@ -14,7 +14,7 @@ import MyPage from './pages/MyPage'
 // 공지 노출 기간: 2026-05-20 ~ 2026-05-26 (7일간), 하루 한 번만 노출
 const NOTICE_START = '2026-05-20'
 const NOTICE_END = '2026-05-26'
-const NOTICE_LAST_SHOWN_KEY = 'notice_last_shown_v3'
+const NOTICE_LAST_SHOWN_KEY = 'notice_last_shown_v4'
 
 export default function App() {
   const { user, login, logout } = useUser()
@@ -65,8 +65,12 @@ export default function App() {
                 <strong className="text-(--color-primary)">계측기 관리</strong> 메뉴가 새로 추가됐습니다.
                 계측기 사용 시작 시 <strong>'사용'</strong>을 눌러주시면 관리대장에 자동 기록됩니다.
               </p>
+              <p>
+                <strong className="text-(--color-primary)">차량 예약</strong> 후 <strong>'예약정보'</strong> 창에서
+                차량 일지를 작성해 주세요. <strong className="text-red-500">기존에 사용하던 차량 일지(별도 장부)는 이제 사용하지 않습니다.</strong>
+              </p>
               <p className="text-(--color-text-secondary)">
-                ※ 화면이 새 메뉴(계측기)가 안 보이면 아래 절차로 한 번만 갱신해 주세요. 이후엔 자동 갱신됩니다.
+                ※ 화면에 새 메뉴(계측기)가 안 보이면 아래 절차로 한 번만 갱신해 주세요. 이후엔 자동 갱신됩니다.
               </p>
               <div className="rounded-lg bg-(--color-bg) p-3 space-y-1.5 text-xs text-(--color-text-secondary)">
                 <p>• <strong className="text-(--color-text)">PC 브라우저</strong>: Ctrl + Shift + R</p>
