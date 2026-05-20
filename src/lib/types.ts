@@ -49,7 +49,7 @@ export interface CarLog {
   created_at: string
 }
 
-export type TabType = 'car' | 'room' | 'chamber' | 'my'
+export type TabType = 'car' | 'room' | 'chamber' | 'instrument' | 'my'
 
 export interface Car {
   name: string
@@ -66,3 +66,45 @@ export const CARS: Car[] = [
 
 export const MEETING_ROOMS = ['미팅룸7', '미팅룸8']
 export const CHAMBERS = ['챔버']
+
+export interface Instrument {
+  id: string
+  no: number | null
+  instrument_no: string | null
+  name: string | null
+  english_name: string | null
+  model: string | null
+  serial_number: string | null
+  manufacturer: string | null
+  specification: string | null
+  purchase_price: number | null
+  purchase_from: string | null
+  purchase_period: string | null
+  calibration_cycle: string | null
+  last_calibration_date: string | null
+  next_calibration_date: string | null
+  judgment_criteria: string | null
+  status: string | null
+  department: string | null
+  datalink: string | null
+  q_business: string | null
+  validation_fm: string | null
+  validation_qm: string | null
+  remarks: string | null
+  remarks2: string | null
+  created_at: string
+  updated_at?: string
+}
+
+export interface InstrumentUsage {
+  id: string
+  instrument_id: string | null
+  instrument_no: string | null
+  name: string | null
+  english_name: string | null
+  model: string | null
+  user_id: string
+  user_name: string
+  date: string
+  created_at: string
+}

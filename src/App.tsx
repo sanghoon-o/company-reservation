@@ -8,6 +8,7 @@ import TabBar from './components/TabBar'
 import CarPage from './pages/CarPage'
 import RoomPage from './pages/RoomPage'
 import ChamberPage from './pages/ChamberPage'
+import InstrumentPage from './pages/InstrumentPage'
 import MyPage from './pages/MyPage'
 
 // 공지 노출 기간: 2026-04-08 ~ 2026-04-14 (7일간), 하루 한 번만 노출
@@ -43,6 +44,7 @@ export default function App() {
         {tab === 'car' && <CarPage user={user} />}
         {tab === 'room' && <RoomPage user={user} />}
         {tab === 'chamber' && <ChamberPage user={user} />}
+        {tab === 'instrument' && <InstrumentPage user={user} />}
         {tab === 'my' && <MyPage user={user} onLogout={logout} dark={dark} onToggleDark={toggle} />}
       </div>
       <TabBar active={tab} onChange={setTab} />

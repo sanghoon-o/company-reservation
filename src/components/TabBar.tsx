@@ -1,10 +1,11 @@
-import { Car, DoorOpen, Box, CalendarCheck } from 'lucide-react'
+import { Car, DoorOpen, Box, CalendarCheck, Gauge } from 'lucide-react'
 import type { TabType } from '../lib/types'
 
 const tabs: { key: TabType; label: string; icon: typeof Car }[] = [
   { key: 'car', label: '차량', icon: Car },
   { key: 'room', label: '미팅룸', icon: DoorOpen },
   { key: 'chamber', label: '챔버', icon: Box },
+  { key: 'instrument', label: '계측기', icon: Gauge },
   { key: 'my', label: '내예약', icon: CalendarCheck },
 ]
 

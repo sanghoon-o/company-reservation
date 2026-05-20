@@ -25,3 +25,6 @@ dist-ssr
 .env
 .env.local
 .claude/
+
+# 사내 자료 (1회성 import 소스, GitHub 업로드 제외)
+data/
