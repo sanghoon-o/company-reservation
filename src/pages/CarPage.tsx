@@ -544,21 +544,32 @@ export default function CarPage({ user }: Props) {
           <div className="text-sm text-(--color-text-secondary)">
             {modal && formatDate(modal.date)} · <span className="font-semibold text-(--color-text)">{modal?.car}</span>
           </div>
-          {/* 시간대 선택 — 오전 ~12:59 / 오후 13:00~ / 종일 */}
+          {/* 시간대 선택 — 이미 점유된 시간대(또는 그것과 충돌하는 종일)는 비활성화 */}
           <div className="grid grid-cols-3 gap-2">
-            {(['am', 'pm', 'full'] as const).map(p => (
-              <button
-                key={p}
-                onClick={() => setBookPeriod(p)}
-                className={`rounded-lg border py-2.5 text-sm font-semibold transition-colors ${
-                  bookPeriod === p
-                    ? 'border-(--color-primary) bg-(--color-primary)/10 text-(--color-primary)'
-                    : 'border-(--color-border) bg-(--color-bg) text-(--color-text)'
-                }`}
-              >
-                {p === 'am' ? '오전' : p === 'pm' ? '오후' : '종일'}
-              </button>
-            ))}
+            {(['am', 'pm', 'full'] as const).map(p => {
+              const amBusy = modal ? !!getReservationForSlot(modal.date, modal.car, 'am') : false
+              const pmBusy = modal ? !!getReservationForSlot(modal.date, modal.car, 'pm') : false
+              const disabled =
+                (p === 'am' && amBusy) ||
+                (p === 'pm' && pmBusy) ||
+                (p === 'full' && (amBusy || pmBusy))
+              return (
+                <button
+                  key={p}
+                  onClick={() => !disabled && setBookPeriod(p)}
+                  disabled={disabled}
+                  className={`rounded-lg border py-2.5 text-sm font-semibold transition-colors ${
+                    disabled
+                      ? 'border-(--color-border) bg-(--color-border)/20 text-(--color-text-secondary) opacity-50 cursor-not-allowed'
+                      : bookPeriod === p
+                        ? 'border-(--color-primary) bg-(--color-primary)/10 text-(--color-primary)'
+                        : 'border-(--color-border) bg-(--color-bg) text-(--color-text)'
+                  }`}
+                >
+                  {p === 'am' ? '오전' : p === 'pm' ? '오후' : '종일'}
+                </button>
+              )
+            })}
           </div>
           <input
             type="text"
