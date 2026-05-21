@@ -634,6 +634,12 @@ export default function CarPage({ user }: Props) {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-(--color-text-secondary)">차량</span><span className="font-medium">{modal.reservation.car_name}</span></div>
               <div className="flex justify-between"><span className="text-(--color-text-secondary)">날짜</span><span>{formatDate(modal.reservation.date)}</span></div>
+              <div className="flex justify-between">
+                <span className="text-(--color-text-secondary)">시간대</span>
+                <span className="font-medium">
+                  {modal.reservation.period === 'am' ? '오전' : modal.reservation.period === 'pm' ? '오후' : '종일'}
+                </span>
+              </div>
               <div className="flex justify-between"><span className="text-(--color-text-secondary)">예약자</span><span className="font-medium">{modal.reservation.user_name}</span></div>
               <div className="flex justify-between"><span className="text-(--color-text-secondary)">행선지</span><span>{modal.reservation.destination}</span></div>
               {modal.reservation.reason && (
