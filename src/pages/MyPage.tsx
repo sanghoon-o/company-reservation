@@ -15,10 +15,11 @@ interface Props {
 }
 
 type AnyReservation = (CarReservation & { _type: 'car' }) | (RoomReservation & { _type: 'room' })
+type Holding = InstrumentUsage & { serial_number: string | null }
 
 export default function MyPage({ user, onLogout, dark, onToggleDark }: Props) {
   const [items, setItems] = useState<AnyReservation[]>([])
-  const [holdings, setHoldings] = useState<InstrumentUsage[]>([])
+  const [holdings, setHoldings] = useState<Holding[]>([])
   const [cancelTarget, setCancelTarget] = useState<AnyReservation | null>(null)
   const [loading, setLoading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -59,7 +60,24 @@ export default function MyPage({ user, onLogout, dark, onToggleDark }: Props) {
       seen.add(u.instrument_id)
       latestByInstrument.push(u)
     }
-    setHoldings(latestByInstrument.filter(u => u.user_id === user.id))
+    const myHoldings = latestByInstrument.filter(u => u.user_id === user.id)
+
+    // instruments 테이블에서 serial_number만 별도 조회하여 매핑 (instrument_usages엔 serial이 없음)
+    const ids = myHoldings.map(h => h.instrument_id).filter(Boolean) as string[]
+    const serialMap = new Map<string, string | null>()
+    if (ids.length > 0) {
+      const { data: insts } = await supabase
+        .from('instruments')
+        .select('id, serial_number')
+        .in('id', ids)
+      for (const i of (insts || []) as Array<{ id: string; serial_number: string | null }>) {
+        serialMap.set(i.id, i.serial_number)
+      }
+    }
+    setHoldings(myHoldings.map(h => ({
+      ...h,
+      serial_number: h.instrument_id ? (serialMap.get(h.instrument_id) ?? null) : null,
+    })))
   }, [user.id])
 
   useEffect(() => { fetchAll() }, [fetchAll])
@@ -180,7 +198,7 @@ export default function MyPage({ user, onLogout, dark, onToggleDark }: Props) {
                             {h.name || h.english_name || h.model || h.instrument_no || '-'}
                           </div>
                           <div className="text-xs text-(--color-text-secondary) truncate">
-                            {[h.english_name, h.model, h.instrument_no].filter(Boolean).join(' · ')}
+                            {[h.english_name, h.model, h.serial_number].filter(Boolean).join(' · ')}
                           </div>
                         </div>
                         <div className="text-xs text-(--color-text-secondary) shrink-0">
