@@ -193,6 +193,8 @@ export default function InstrumentPage({ user }: Props) {
   /* ── 계측기 찾기 ── */
   const [findInput, setFindInput] = useState('')
   const [findSuggestions, setFindSuggestions] = useState<Instrument[]>([])
+  const [selectedFind, setSelectedFind] = useState<Instrument | null>(null)
+  const [showFindList, setShowFindList] = useState(false)
   const [findResult, setFindResult] = useState<
     | { kind: 'none' }
     | { kind: 'empty'; instrumentName: string }
@@ -228,9 +230,19 @@ export default function InstrumentPage({ user }: Props) {
   /* ── 찾기 자동완성 ── */
   useEffect(() => {
     const v = findInput.trim()
-    if (!v) { setFindSuggestions([]); return }
-    const t = setTimeout(() => searchAll(v, 8).then(setFindSuggestions), 200)
+    // 선택 상태에서 입력값이 바뀌면 선택 해제 + 결과 초기화 (id 매칭 정확성 보장)
+    if (selectedFind && getPrimaryLabel(selectedFind) !== findInput) {
+      setSelectedFind(null)
+      setFindResult({ kind: 'none' })
+    }
+    if (!v) { setFindSuggestions([]); setShowFindList(false); return }
+    const t = setTimeout(async () => {
+      const rows = await searchAll(v, 8)
+      setFindSuggestions(rows)
+      setShowFindList(true)
+    }, 200)
     return () => clearTimeout(t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [findInput])
 
   /* ── 드롭다운에서 계측기 선택 ── */
@@ -239,6 +251,13 @@ export default function InstrumentPage({ user }: Props) {
     setUseInput(getPrimaryLabel(i))
     setShowUseList(false)
     setUseMessage(null)
+  }
+
+  const selectFindInstrument = (i: Instrument) => {
+    setSelectedFind(i)
+    setFindInput(getPrimaryLabel(i))
+    setShowFindList(false)
+    setFindResult({ kind: 'none' })
   }
 
   /* ── 사용 등록 ── */
@@ -297,18 +316,25 @@ export default function InstrumentPage({ user }: Props) {
     }
   }
 
-  /* ── 사용 중 찾기 ── */
+  /* ── 사용 중 찾기 ──
+   * selectedFind(드롭다운에서 명시적 클릭한 row) 우선.
+   * 같은 name을 가진 다른 instrument와 혼동되지 않게 id로 정확 매칭.
+   * selectedFind가 없으면 instrument_no 정확 매칭 → 라벨 매칭 순으로 fallback. */
   const handleFind = async () => {
     const v = findInput.trim()
-    if (!v) { setFindResult({ kind: 'none' }); return }
+    if (!v && !selectedFind) { setFindResult({ kind: 'none' }); return }
     setFindLoading(true)
     try {
-      const rows = await searchAll(v, 20)
-      const lower = v.toLowerCase()
-      const target =
-        rows.find(r => [r.name, r.english_name, r.model, r.instrument_no]
-          .filter(Boolean).map(s => String(s).toLowerCase()).includes(lower)
-        ) || rows[0] || null
+      let target: Instrument | null = selectedFind
+      if (!target) {
+        const rows = await searchAll(v, 20)
+        const lower = v.toLowerCase()
+        target =
+          rows.find(r => r.instrument_no && r.instrument_no.toLowerCase() === lower) ||
+          rows.find(r => [r.name, r.english_name, r.model]
+            .filter(Boolean).map(s => String(s).toLowerCase()).includes(lower)
+          ) || rows[0] || null
+      }
       if (!target) { setFindResult({ kind: 'notfound' }); return }
       const { data, error } = await supabase
         .from('instrument_usages')
@@ -582,20 +608,13 @@ export default function InstrumentPage({ user }: Props) {
           <label className="block text-sm font-semibold mb-2 text-(--color-text)">계측기 찾기</label>
           <div className="flex items-center gap-2">
             <input
-              list="instrument-find-options"
               className={inputCls}
               value={findInput}
               onChange={e => setFindInput(e.target.value)}
+              onFocus={() => { if (findSuggestions.length > 0 && !selectedFind) setShowFindList(true) }}
               placeholder="계측기명 / 모델 / 관리번호"
               onKeyDown={e => { if (e.key === 'Enter') handleFind() }}
             />
-            <datalist id="instrument-find-options">
-              {findSuggestions.map(s => {
-                const label = [s.name, s.english_name, s.model, s.instrument_no].filter(Boolean).join(' · ')
-                const value = s.name || s.english_name || s.model || s.instrument_no || ''
-                return <option key={s.id} value={value}>{label}</option>
-              })}
-            </datalist>
             <button
               onClick={handleFind}
               disabled={findLoading}
@@ -604,6 +623,38 @@ export default function InstrumentPage({ user }: Props) {
               {findLoading ? '...' : '찾기'}
             </button>
           </div>
+
+          {/* 자동완성 드롭다운 — 선택 안 된 상태에서만 표시 */}
+          {showFindList && !selectedFind && findInput.trim() && (
+            findSuggestions.length > 0 ? (
+              <div className="mt-2 rounded-lg border border-(--color-border) bg-(--color-bg) max-h-64 overflow-y-auto divide-y divide-(--color-border)">
+                {findSuggestions.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => selectFindInstrument(s)}
+                    className="w-full px-3 py-2 text-left hover:bg-(--color-border)/40"
+                  >
+                    <div className="text-sm font-medium text-(--color-text)">{getPrimaryLabel(s)}</div>
+                    {getSubLabel(s) && (
+                      <div className="text-xs text-(--color-text-secondary) truncate">{getSubLabel(s)}</div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-(--color-text-secondary)">일치하는 계측기가 없습니다.</p>
+            )
+          )}
+
+          {/* 선택된 항목 요약 (관리번호까지 명시) */}
+          {selectedFind && (
+            <div className="mt-2 rounded-lg bg-(--color-primary)/10 px-3 py-2 text-xs text-(--color-text)">
+              <span className="text-(--color-text-secondary)">선택됨 · </span>
+              {[selectedFind.name, selectedFind.english_name, selectedFind.model, selectedFind.instrument_no]
+                .filter(Boolean).join(' · ')}
+            </div>
+          )}
+
           {findResult.kind === 'usage' && (
             <p className="mt-3 text-sm text-(--color-text)">
               {formatKoreanDate(findResult.usage.date)} <strong>{findResult.usage.user_name}</strong>님이 사용중입니다.
