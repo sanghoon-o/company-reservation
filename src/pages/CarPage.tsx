@@ -60,6 +60,19 @@ export default function CarPage({ user }: Props) {
   const [logNote, setLogNote] = useState('')
   const [carLogs, setCarLogs] = useState<Record<string, CarLog>>({})
 
+  // 챔버 패턴: 선택된 날짜의 상세를 하단에 표시
+  const [selectedDate, setSelectedDate] = useState(() => toLocalDateStr())
+  // 예약 모달에서 선택한 시간대 ('am' | 'pm' | 'full', 오전/오후 분기점 13시)
+  const [bookPeriod, setBookPeriod] = useState<'am' | 'pm' | 'full'>('full')
+
+  // 특정 (날짜, 차량, 슬롯)에 예약이 있는지 — period가 'full'이면 am/pm 양쪽 점유
+  const getReservationForSlot = (date: string, carName: string, slot: 'am' | 'pm'): CarReservation | undefined => {
+    return reservations.find(r => {
+      if (r.date !== date || r.car_name !== carName) return false
+      return r.period === slot || r.period === 'full'
+    })
+  }
+
   // 차량 일지 데이터 조회
   useEffect(() => {
     supabase.from('car_logs').select('*').then(({ data }) => {
@@ -104,18 +117,17 @@ export default function CarPage({ user }: Props) {
   const totalRows = Math.ceil((firstDayOfWeek + daysInMonth) / 7)
   const today = toLocalDateStr()
 
-  const getReservation = (date: string, carName: string) =>
-    reservations.find(r => r.date === date && r.car_name === carName)
-
-  const handleCellClick = (date: string, carName: string) => {
-    const res = getReservation(date, carName)
-    if (!res) {
-      if (date < today) return
+  // 챔버 패턴: 하단 슬롯 클릭
+  const handleSlotClick = (carName: string, slot: 'am' | 'pm') => {
+    const res = getReservationForSlot(selectedDate, carName, slot)
+    if (res) {
+      setModal({ type: 'detail', date: selectedDate, car: carName, reservation: res })
+    } else {
+      if (selectedDate < today) return
       setDestination('')
       setReason('')
-      setModal({ type: 'book', date, car: carName })
-    } else {
-      setModal({ type: 'detail', date, car: carName, reservation: res })
+      setBookPeriod(slot)
+      setModal({ type: 'book', date: selectedDate, car: carName })
     }
   }
 
@@ -128,12 +140,17 @@ export default function CarPage({ user }: Props) {
         user_name: user.name,
         car_name: modal.car,
         date: modal.date,
+        period: bookPeriod,
         destination: destination.trim(),
         reason: reason.trim() || null,
       })
       if (error) {
         if (error.message.includes('duplicate') || error.code === '23505') {
-          alert('이미 예약된 차량입니다.')
+          alert('이미 예약된 시간대입니다.')
+        } else if (error.message.includes('full-day') || error.message.includes('full conflicts')) {
+          alert('이 날짜에 종일 예약이 이미 있어 시간대 분할 예약이 불가합니다.')
+        } else if (error.message.includes('already reserved on')) {
+          alert('해당 날짜에 이미 다른 시간대 예약이 있어 종일 예약이 불가합니다.')
         } else {
           alert('예약 실패: ' + error.message)
         }
@@ -181,6 +198,7 @@ export default function CarPage({ user }: Props) {
           date: dateDisplay,
           user_name: user.name,
           car_name: currentCar,
+          period: reservation.period,
         })
         const result = await jsonpQuery(SHEET_URL, params)
         if (result?.ok && result.data) {
@@ -246,6 +264,7 @@ export default function CarPage({ user }: Props) {
           department: logDepartment.trim(),
           user_name: user.name,
           car_name: modal.car,
+          period: modal.reservation.period,
           odo_before: logOdoBefore,
           odo_after: logOdoAfter || '',
           distance: distance != null ? String(distance) : '',
@@ -369,19 +388,19 @@ export default function CarPage({ user }: Props) {
         ))}
       </div>
 
-      {/* Calendar - flex fill, no scroll */}
-      <div className="flex-1 flex flex-col px-2 pb-20 min-h-0">
+      {/* Calendar */}
+      <div className="px-2 pb-1">
         {/* Day headers */}
         <div className="grid grid-cols-7 text-center text-xs font-medium text-(--color-text-secondary) mb-1">
           {['일','월','화','수','목','금','토'].map(d => (
-            <div key={d} className="py-1">{d}</div>
+            <div key={d} className={`py-1 ${d === '일' ? 'text-red-400' : d === '토' ? 'text-blue-400' : ''}`}>{d}</div>
           ))}
         </div>
 
-        {/* Days grid - fills remaining space */}
+        {/* Days grid */}
         <div
-          className="grid grid-cols-7 gap-px flex-1 min-h-0"
-          style={{ gridTemplateRows: `repeat(${totalRows}, 1fr)` }}
+          className="grid grid-cols-7 gap-px"
+          style={{ gridTemplateRows: `repeat(${totalRows}, minmax(56px, 1fr))` }}
         >
           {Array.from({ length: firstDayOfWeek }).map((_, i) => (
             <div key={`empty-${i}`} />
@@ -391,43 +410,128 @@ export default function CarPage({ user }: Props) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
             const isPast = dateStr < today
             const isToday = dateStr === today
+            const isSelected = dateStr === selectedDate
             const dayOfWeek = new Date(year, month, day).getDay()
 
             return (
-              <div
+              <button
                 key={day}
-                className={`rounded-lg p-1 border flex flex-col ${
-                  isToday ? 'border-(--color-primary-light)' : 'border-(--color-border)'
+                onClick={() => setSelectedDate(dateStr)}
+                className={`rounded-lg p-1 border flex flex-col items-stretch transition-all ${
+                  isSelected
+                    ? 'border-(--color-primary) bg-(--color-primary)/10 shadow-sm'
+                    : isToday
+                      ? 'border-(--color-primary-light) bg-(--color-primary)/5'
+                      : 'border-transparent hover:bg-(--color-surface)'
                 } ${isPast ? 'opacity-50' : ''}`}
               >
-                <div className={`text-xs font-medium mb-0.5 ${
-                  dayOfWeek === 0 ? 'text-red-500' : dayOfWeek === 6 ? 'text-blue-500' : ''
+                <span className={`text-xs font-medium text-left ${
+                  isSelected ? 'text-(--color-primary)' :
+                  dayOfWeek === 0 ? 'text-red-500' : dayOfWeek === 6 ? 'text-blue-500' : 'text-(--color-text)'
                 }`}>
                   {day}
-                </div>
-                <div className="flex flex-col gap-0.5 flex-1 min-h-0">
+                </span>
+                {/* 차량 3대 × 오전/오후 분할 bar — 예약전=진한톤, 예약됨=연한톤(alpha) */}
+                <div className="mt-1 flex flex-col gap-px flex-1 justify-end pb-0.5">
                   {CARS.map(car => {
-                    const res = getReservation(dateStr, car.name)
-                    const isMine = res?.user_id === user.id
+                    const am = getReservationForSlot(dateStr, car.name, 'am')
+                    const pm = getReservationForSlot(dateStr, car.name, 'pm')
                     return (
-                      <button
-                        key={car.name}
-                        onClick={() => handleCellClick(dateStr, car.name)}
-                        disabled={isPast && !res}
-                        className="w-full rounded-sm px-1 flex-1 min-h-0 text-[10px] leading-tight truncate text-left transition-colors flex items-center"
-                        style={{
-                          backgroundColor: res
-                            ? isMine ? '#3b82f6' : car.color
-                            : `${car.color}18`,
-                          color: res ? '#fff' : car.color,
-                          opacity: isPast && !res ? 0.4 : 1,
-                        }}
-                      >
-                        {res ? (isMine ? `✅${car.name[0]}` : `🔴${res.user_name}`) : car.name[0]}
-                      </button>
+                      <div key={car.name} className="flex h-1.5 gap-px">
+                        <div
+                          className="flex-1 rounded-l-sm"
+                          style={{ backgroundColor: am ? `${car.color}33` : car.color }}
+                        />
+                        <div
+                          className="flex-1 rounded-r-sm"
+                          style={{ backgroundColor: pm ? `${car.color}33` : car.color }}
+                        />
+                      </div>
                     )
                   })}
                 </div>
+              </button>
+            )
+          })}
+        </div>
+
+      </div>
+
+      {/* 선택된 날짜 헤더 + 차량별 오전/오후 슬롯 카드 */}
+      <div className="px-4 py-2 flex items-center justify-between bg-(--color-bg) border-t border-(--color-border)">
+        <span className="text-sm font-bold text-(--color-text)">
+          {(() => {
+            const d = new Date(selectedDate + 'T00:00:00')
+            const days = ['일','월','화','수','목','금','토']
+            return `${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`
+          })()}
+        </span>
+        <span className="text-xs text-(--color-text-secondary)">오전 ~12:59 · 오후 13:00~</span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto pb-20 px-4 pt-2">
+        <div className="space-y-1.5">
+          {CARS.map(car => {
+            const am = getReservationForSlot(selectedDate, car.name, 'am')
+            const pm = getReservationForSlot(selectedDate, car.name, 'pm')
+            const isFullBooked = !!(am && pm && am.id === pm.id)
+            const isPastDay = selectedDate < today
+            const renderSlotCell = (slot: 'am' | 'pm', res: CarReservation | undefined) => {
+              const isMine = res?.user_id === user.id
+              return (
+                <button
+                  key={slot}
+                  onClick={() => handleSlotClick(car.name, slot)}
+                  disabled={!res && isPastDay}
+                  className="flex-1 px-2 py-2.5 text-sm text-left border-l border-(--color-border) transition-colors disabled:opacity-50 min-w-0"
+                  style={{ backgroundColor: res ? `${car.color}1f` : 'transparent' }}
+                >
+                  {res ? (
+                    <span className={`block truncate font-medium ${isMine ? 'text-(--color-primary)' : ''}`}>
+                      {res.user_name}
+                      <span className="text-(--color-text-secondary) font-normal ml-1">· {res.destination}</span>
+                    </span>
+                  ) : (
+                    <span className="block text-center text-(--color-text-secondary)">
+                      {slot === 'am' ? '오전 예약' : '오후 예약'}
+                    </span>
+                  )}
+                </button>
+              )
+            }
+            return (
+              <div
+                key={car.name}
+                className="flex items-stretch rounded-lg overflow-hidden border"
+                style={{ borderColor: `${car.color}55` }}
+              >
+                <div
+                  className="flex items-center gap-1.5 px-2 py-2.5 shrink-0 w-16"
+                  style={{ backgroundColor: `${car.color}1a` }}
+                >
+                  <span className="text-sm font-bold truncate" style={{ color: car.color }}>
+                    {car.name}
+                  </span>
+                </div>
+                {isFullBooked && am ? (
+                  // 종일 예약: 두 슬롯을 합쳐 한 칸으로 표시
+                  <button
+                    onClick={() => handleSlotClick(car.name, 'am')}
+                    className="flex-1 px-2 py-2.5 text-sm text-left border-l border-(--color-border) min-w-0"
+                    style={{ backgroundColor: `${car.color}1f` }}
+                  >
+                    <span className={`block truncate font-medium ${am.user_id === user.id ? 'text-(--color-primary)' : ''}`}>
+                      <span className="text-[10px] px-1 py-0.5 rounded mr-1.5" style={{ backgroundColor: car.color, color: '#fff' }}>종일</span>
+                      {am.user_name}
+                      <span className="text-(--color-text-secondary) font-normal ml-1">· {am.destination}</span>
+                    </span>
+                  </button>
+                ) : (
+                  <>
+                    {renderSlotCell('am', am)}
+                    {renderSlotCell('pm', pm)}
+                  </>
+                )}
               </div>
             )
           })}
@@ -439,6 +543,22 @@ export default function CarPage({ user }: Props) {
         <div className="space-y-3">
           <div className="text-sm text-(--color-text-secondary)">
             {modal && formatDate(modal.date)} · <span className="font-semibold text-(--color-text)">{modal?.car}</span>
+          </div>
+          {/* 시간대 선택 — 오전 ~12:59 / 오후 13:00~ / 종일 */}
+          <div className="grid grid-cols-3 gap-2">
+            {(['am', 'pm', 'full'] as const).map(p => (
+              <button
+                key={p}
+                onClick={() => setBookPeriod(p)}
+                className={`rounded-lg border py-2.5 text-sm font-semibold transition-colors ${
+                  bookPeriod === p
+                    ? 'border-(--color-primary) bg-(--color-primary)/10 text-(--color-primary)'
+                    : 'border-(--color-border) bg-(--color-bg) text-(--color-text)'
+                }`}
+              >
+                {p === 'am' ? '오전' : p === 'pm' ? '오후' : '종일'}
+              </button>
+            ))}
           </div>
           <input
             type="text"

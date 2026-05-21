@@ -6,12 +6,15 @@ export interface User {
   created_at: string
 }
 
+export type CarPeriod = 'am' | 'pm' | 'full'
+
 export interface CarReservation {
   id: string
   user_id: string
   user_name: string
   car_name: string
   date: string
+  period: CarPeriod
   destination: string
   reason: string | null
   status: string

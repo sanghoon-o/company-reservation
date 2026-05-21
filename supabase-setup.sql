@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS car_reservations (
   user_name TEXT NOT NULL,
   car_name TEXT NOT NULL,
   date DATE NOT NULL,
+  period TEXT NOT NULL DEFAULT 'full' CHECK (period IN ('am', 'pm', 'full')),
   destination TEXT NOT NULL,
   reason TEXT,
   status TEXT DEFAULT 'confirmed' CHECK (status IN ('confirmed', 'cancelled')),
@@ -128,10 +129,42 @@ ALTER PUBLICATION supabase_realtime ADD TABLE room_reservations;
 ALTER PUBLICATION supabase_realtime ADD TABLE instruments;
 ALTER PUBLICATION supabase_realtime ADD TABLE instrument_usages;
 
--- 8. 차량 예약 중복 방지 (같은 차량, 같은 날짜에 confirmed 예약은 1개만)
+-- 8. 차량 예약 중복 방지 (같은 차량, 같은 날짜, 같은 시간대에 confirmed 예약은 1개만)
 CREATE UNIQUE INDEX idx_car_unique_booking
-  ON car_reservations(car_name, date)
+  ON car_reservations(car_name, date, period)
   WHERE status = 'confirmed';
+
+-- 8-1. 종일(full) vs 오전/오후(am/pm) 충돌 방지 트리거
+CREATE OR REPLACE FUNCTION check_car_period_conflict() RETURNS trigger AS $$
+BEGIN
+  IF NEW.status = 'confirmed' THEN
+    IF NEW.period = 'full' THEN
+      IF EXISTS (
+        SELECT 1 FROM car_reservations
+        WHERE car_name = NEW.car_name AND date = NEW.date
+          AND status = 'confirmed' AND id IS DISTINCT FROM NEW.id
+      ) THEN
+        RAISE EXCEPTION 'Car % already reserved on % (full conflicts with any)', NEW.car_name, NEW.date;
+      END IF;
+    ELSE
+      IF EXISTS (
+        SELECT 1 FROM car_reservations
+        WHERE car_name = NEW.car_name AND date = NEW.date
+          AND status = 'confirmed' AND period = 'full'
+          AND id IS DISTINCT FROM NEW.id
+      ) THEN
+        RAISE EXCEPTION 'Car % already has full-day reservation on %', NEW.car_name, NEW.date;
+      END IF;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS car_period_conflict_trigger ON car_reservations;
+CREATE TRIGGER car_period_conflict_trigger
+  BEFORE INSERT OR UPDATE ON car_reservations
+  FOR EACH ROW EXECUTE FUNCTION check_car_period_conflict();
 
 -- 9. 미팅룸/챔버 예약 시간 겹침 방지 함수
 CREATE OR REPLACE FUNCTION check_room_overlap()
