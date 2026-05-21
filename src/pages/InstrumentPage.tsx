@@ -559,7 +559,7 @@ export default function InstrumentPage({ user }: Props) {
           />
           <button
             onClick={handleUse}
-            disabled={useLoading || !selectedUse}
+            disabled={useLoading || !selectedUse || selectedUse.status !== '합격'}
             className="mt-2 w-full rounded-lg bg-(--color-primary) py-2.5 text-sm font-semibold text-white disabled:opacity-50"
           >
             {useLoading ? '...' : '사용'}
@@ -589,12 +589,15 @@ export default function InstrumentPage({ user }: Props) {
             )
           )}
 
-          {/* 선택된 항목 요약 */}
+          {/* 선택된 항목 요약 — status가 '합격' 이외면 사용불가 표시 */}
           {selectedUse && (
             <div className="mt-2 rounded-lg bg-(--color-primary)/10 px-3 py-2 text-xs text-(--color-text)">
               <span className="text-(--color-text-secondary)">선택됨 · </span>
               {[selectedUse.name, selectedUse.english_name, selectedUse.model, selectedUse.instrument_no]
                 .filter(Boolean).join(' · ')}
+              {selectedUse.status !== '합격' && (
+                <span className="ml-2 font-semibold text-red-500">사용불가</span>
+              )}
             </div>
           )}
 
@@ -650,7 +653,7 @@ export default function InstrumentPage({ user }: Props) {
             )
           )}
 
-          {/* 선택된 항목 요약 — 관리번호 대신 기기번호로 식별 */}
+          {/* 선택된 항목 요약 — 관리번호 대신 기기번호로 식별 + 사용불가 표시 */}
           {selectedFind && (
             <div className="mt-2 rounded-lg bg-(--color-primary)/10 px-3 py-2 text-xs text-(--color-text)">
               <span className="text-(--color-text-secondary)">선택됨 · </span>
@@ -660,6 +663,9 @@ export default function InstrumentPage({ user }: Props) {
                 selectedFind.model,
                 selectedFind.serial_number ? `기기번호 ${selectedFind.serial_number}` : null,
               ].filter(Boolean).join(' · ')}
+              {selectedFind.status !== '합격' && (
+                <span className="ml-2 font-semibold text-red-500">사용불가</span>
+              )}
             </div>
           )}
 
