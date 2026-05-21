@@ -197,7 +197,7 @@ export default function InstrumentPage({ user }: Props) {
   const [showFindList, setShowFindList] = useState(false)
   const [findResult, setFindResult] = useState<
     | { kind: 'none' }
-    | { kind: 'empty'; instrumentName: string }
+    | { kind: 'empty'; instrumentName: string; department: string | null }
     | { kind: 'usage'; usage: InstrumentUsage }
     | { kind: 'notfound' }
   >({ kind: 'none' })
@@ -349,7 +349,11 @@ export default function InstrumentPage({ user }: Props) {
       }
       const usage = (data && data[0]) as InstrumentUsage | undefined
       if (!usage) {
-        setFindResult({ kind: 'empty', instrumentName: getPrimaryLabel(target) })
+        setFindResult({
+          kind: 'empty',
+          instrumentName: getPrimaryLabel(target),
+          department: target.department ?? null,
+        })
         return
       }
       setFindResult({ kind: 'usage', usage })
@@ -646,12 +650,16 @@ export default function InstrumentPage({ user }: Props) {
             )
           )}
 
-          {/* 선택된 항목 요약 (관리번호까지 명시) */}
+          {/* 선택된 항목 요약 — 관리번호 대신 기기번호로 식별 */}
           {selectedFind && (
             <div className="mt-2 rounded-lg bg-(--color-primary)/10 px-3 py-2 text-xs text-(--color-text)">
               <span className="text-(--color-text-secondary)">선택됨 · </span>
-              {[selectedFind.name, selectedFind.english_name, selectedFind.model, selectedFind.instrument_no]
-                .filter(Boolean).join(' · ')}
+              {[
+                selectedFind.name,
+                selectedFind.english_name,
+                selectedFind.model,
+                selectedFind.serial_number ? `기기번호 ${selectedFind.serial_number}` : null,
+              ].filter(Boolean).join(' · ')}
             </div>
           )}
 
@@ -662,7 +670,10 @@ export default function InstrumentPage({ user }: Props) {
           )}
           {findResult.kind === 'empty' && (
             <p className="mt-3 text-sm text-(--color-text-secondary)">
-              {findResult.instrumentName} — 사용 기록이 없습니다.
+              {findResult.instrumentName}
+              {findResult.department
+                ? <> — 사용부서: <strong className="text-(--color-text)">{findResult.department}</strong></>
+                : ' — 사용 기록이 없습니다.'}
             </p>
           )}
           {findResult.kind === 'notfound' && (
