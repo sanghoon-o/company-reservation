@@ -25,10 +25,14 @@ function doGet(e) {
       var result = recordUsage(e.parameter)
       return jsonResponse_(e, { ok: true, action: 'use', row: result.row })
     }
+    if (action === 'dump') {
+      var rows = dumpInstruments()
+      return jsonResponse_(e, { ok: true, action: 'dump', rows: rows })
+    }
     if (action === 'query') {
       return jsonResponse_(e, { ok: true, status: 'ready' })
     }
-    return jsonResponse_(e, { ok: true, status: 'ready', help: 'use action=use with params instrument_no, english_name, model, user_name' })
+    return jsonResponse_(e, { ok: true, status: 'ready', help: 'use action=use|dump' })
   } catch (err) {
     return jsonResponse_(e, { ok: false, error: String(err && err.message || err) })
   }
@@ -140,4 +144,118 @@ function recordUsage(p) {
   // 사용부서 셀 업데이트 (1-indexed)
   sheet.getRange(targetRow + 1, COL_DEPT + 1).setValue(user_name)
   return { row: targetRow + 1 }
+}
+
+// 시트 전체 row를 JSON으로 반환 (시트 → DB 동기화용)
+// 클라이언트가 instrument_no 기준으로 DB와 비교하여 UPDATE/INSERT 처리
+function dumpInstruments() {
+  var ss = SpreadsheetApp.getActive()
+  var sheet = ss.getSheetByName(SHEET_NAME)
+  var found = null
+
+  function tryFindHeader(sh) {
+    var v = sh.getDataRange().getValues()
+    for (var i = 0; i < Math.min(v.length, 30); i++) {
+      var cells = v[i].map(function (c) { return String(c == null ? '' : c).trim() })
+      if (cells.indexOf('관리번호') >= 0) {
+        var ci = {}
+        cells.forEach(function (h, j) { if (h) ci[h] = j })
+        return { values: v, headerRowIdx: i, colIdx: ci }
+      }
+    }
+    return null
+  }
+
+  if (sheet) found = tryFindHeader(sheet)
+  if (!found) {
+    var sheets = ss.getSheets()
+    for (var s = 0; s < sheets.length; s++) {
+      var r = tryFindHeader(sheets[s])
+      if (r) { found = r; break }
+    }
+  }
+  if (!found) throw new Error('"관리번호" 헤더가 있는 시트를 찾을 수 없음')
+
+  var values = found.values, headerRowIdx = found.headerRowIdx, colIdx = found.colIdx
+  var COL_NO = colIdx['관리번호']
+  var COL_NAME_KO = colIdx['계측기명(한글)']
+  var COL_NAME_EN = colIdx['계측기명(영문)']
+  var COL_MODEL = colIdx['모델명']
+  var COL_SERIAL = colIdx['기기번호']
+  var COL_MAKER = colIdx['제조사']
+  var COL_SPEC = colIdx['규격']
+  var COL_PRICE = colIdx['구입가격']
+  var COL_PURCHASE_FROM = colIdx['구입처']
+  var COL_PURCHASE_PERIOD = colIdx['구입시기']
+  var COL_CYCLE = colIdx['교정주기']
+  var COL_LAST_CAL = colIdx['교정일자']
+  var COL_NEXT_CAL = colIdx['차기교정일자']
+  var COL_CRITERIA = colIdx['합격판정기준']
+  var COL_STATUS = colIdx['판정']
+  var COL_DEPT = colIdx['사용부서']
+  var COL_DATALINK = colIdx['Datalink']
+  var COL_Q = colIdx['Q사업 후속양산']
+  var COL_VAL_FM = colIdx['검증 FM']
+  var COL_VAL_QM = colIdx['검증 QM']
+  var COL_REMARKS = colIdx['비고1']
+  var COL_REMARKS2 = colIdx['비고2']
+
+  function cellText(row, c) {
+    if (c == null) return null
+    var v = row[c]
+    if (v == null) return null
+    var s = (v instanceof Date) ? Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd') : String(v).trim()
+    return (s === '' || s === '-') ? null : s
+  }
+  function cellDate(row, c) {
+    if (c == null) return null
+    var v = row[c]
+    if (v == null || v === '') return null
+    if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd')
+    var s = String(v).trim()
+    var m = s.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/)
+    if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2)
+    return null
+  }
+  function cellDateOrText(row, c) {
+    var d = cellDate(row, c)
+    if (d) return d
+    return cellText(row, c)
+  }
+
+  var out = []
+  for (var r = headerRowIdx + 1; r < values.length; r++) {
+    var row = values[r]
+    var no = cellText(row, COL_NO)
+    var nameKo = cellText(row, COL_NAME_KO)
+    var nameEn = cellText(row, COL_NAME_EN)
+    var model = cellText(row, COL_MODEL)
+    if (!no && !nameKo && !nameEn && !model) continue  // 빈 행 skip
+
+    out.push({
+      instrument_no: no,
+      name: nameKo,
+      english_name: nameEn,
+      model: model,
+      serial_number: cellText(row, COL_SERIAL),
+      manufacturer: cellText(row, COL_MAKER),
+      specification: cellText(row, COL_SPEC),
+      purchase_price: cellText(row, COL_PRICE),
+      purchase_from: cellText(row, COL_PURCHASE_FROM),
+      purchase_period: cellText(row, COL_PURCHASE_PERIOD),
+      calibration_cycle: cellText(row, COL_CYCLE),
+      last_calibration_date: cellDate(row, COL_LAST_CAL),
+      next_calibration_date: cellDateOrText(row, COL_NEXT_CAL),
+      judgment_criteria: cellText(row, COL_CRITERIA),
+      status: cellText(row, COL_STATUS),
+      department: cellText(row, COL_DEPT),
+      datalink: cellText(row, COL_DATALINK),
+      q_business: cellText(row, COL_Q),
+      validation_fm: cellText(row, COL_VAL_FM),
+      validation_qm: cellText(row, COL_VAL_QM),
+      remarks: cellText(row, COL_REMARKS),
+      remarks2: cellText(row, COL_REMARKS2),
+    })
+  }
+  return out
 }

@@ -11,11 +11,47 @@ interface Props { user: User }
 const SHEET_URL = (import.meta.env.VITE_GOOGLE_SHEET_INSTRUMENT_URL || '').replace(/\s+/g, '')
 const SHEET_VIEW_URL = (import.meta.env.VITE_GOOGLE_SHEET_VIEW_INSTRUMENT_URL || '').replace(/\s+/g, '')
 
+// 시트 → DB 동기화 권한 (품질팀)
+const SYNC_ALLOWED_EMAILS = new Set([
+  'jhhan@iedel.com',
+  'dykim@iedel.com',
+  'jscho@iedel.com',
+  'mschun@iedel.com',
+  'sbkim@iedel.com',
+  'shoh@iedel.com',
+])
+
+// 시트 row 타입 (Apps Script action=dump가 반환하는 형태)
+interface SheetInstrumentRow {
+  instrument_no: string | null
+  name: string | null
+  english_name: string | null
+  model: string | null
+  serial_number: string | null
+  manufacturer: string | null
+  specification: string | null
+  purchase_price: string | null
+  purchase_from: string | null
+  purchase_period: string | null
+  calibration_cycle: string | null
+  last_calibration_date: string | null
+  next_calibration_date: string | null
+  judgment_criteria: string | null
+  status: string | null
+  department: string | null
+  datalink: string | null
+  q_business: string | null
+  validation_fm: string | null
+  validation_qm: string | null
+  remarks: string | null
+  remarks2: string | null
+}
+
 const inputCls =
   'flex-1 rounded-lg border border-(--color-border) bg-(--color-bg) px-3 py-2.5 text-sm text-(--color-text) outline-none focus:border-(--color-primary-light)'
 
 // JSONP helper - Apps Script 응답을 받기 위해 (CORS 우회 + 응답 확인)
-function jsonpRequest(baseUrl: string, params: URLSearchParams, timeoutMs = 10000): Promise<{ ok: boolean; error?: string; row?: number }> {
+function jsonpRequest<T>(baseUrl: string, params: URLSearchParams, timeoutMs = 15000): Promise<T> {
   return new Promise((resolve, reject) => {
     const callbackName = 'instCb_' + Date.now() + '_' + Math.floor(Math.random() * 100000)
     const script = document.createElement('script')
@@ -27,7 +63,7 @@ function jsonpRequest(baseUrl: string, params: URLSearchParams, timeoutMs = 1000
     }
     ;(window as unknown as Record<string, (d: unknown) => void>)[callbackName] = (data) => {
       cleanup()
-      resolve(data as { ok: boolean; error?: string; row?: number })
+      resolve(data as T)
     }
     script.onerror = () => { cleanup(); reject(new Error('JSONP script load failed')) }
     timer = window.setTimeout(() => { cleanup(); reject(new Error('JSONP timeout')) }, timeoutMs)
@@ -35,6 +71,15 @@ function jsonpRequest(baseUrl: string, params: URLSearchParams, timeoutMs = 1000
     script.src = `${baseUrl}?${params.toString()}`
     document.head.appendChild(script)
   })
+}
+
+// 시트 전체 row를 읽어옴 (Apps Script action=dump)
+async function fetchSheetDump(): Promise<SheetInstrumentRow[]> {
+  if (!SHEET_URL) throw new Error('SHEET_URL env var 미설정')
+  const params = new URLSearchParams({ action: 'dump' })
+  const res = await jsonpRequest<{ ok: boolean; error?: string; rows?: SheetInstrumentRow[] }>(SHEET_URL, params, 30000)
+  if (!res.ok) throw new Error(res.error || '시트 dump 실패')
+  return res.rows || []
 }
 
 // iframe fallback - 옛 SW가 cross-origin script tag를 가로채 JSONP 실패하는 환경 대응
@@ -76,7 +121,7 @@ async function updateSheetDepartment(payload: {
 
   // 1차: JSONP (응답 확인 가능)
   try {
-    const result = await jsonpRequest(SHEET_URL, params)
+    const result = await jsonpRequest<{ ok: boolean; error?: string; row?: number }>(SHEET_URL, params)
     console.log('[instrument sheet] JSONP response:', result)
     return result
   } catch (err) {
@@ -155,6 +200,11 @@ export default function InstrumentPage({ user }: Props) {
     | { kind: 'notfound' }
   >({ kind: 'none' })
   const [findLoading, setFindLoading] = useState(false)
+
+  /* ── 시트 → DB 동기화 (품질팀 전용) ── */
+  const canSync = SYNC_ALLOWED_EMAILS.has(user.email)
+  const [syncing, setSyncing] = useState<null | 'cal' | 'dept' | 'status' | 'add'>(null)
+  const [syncMessage, setSyncMessage] = useState<{ kind: 'error' | 'success' | 'info'; text: string } | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -279,6 +329,166 @@ export default function InstrumentPage({ user }: Props) {
       setFindResult({ kind: 'usage', usage })
     } finally {
       setFindLoading(false)
+    }
+  }
+
+  /* ── 시트 → DB 동기화 공통: 단일 필드 업데이트 (instrument_no 매칭) ── */
+  const syncSingleField = async (
+    fieldKey: 'last_calibration_date' | 'department' | 'status',
+    label: string,
+    sheetKey: keyof SheetInstrumentRow,
+  ) => {
+    setSyncMessage(null)
+    try {
+      const [sheetRows, dbRes] = await Promise.all([
+        fetchSheetDump(),
+        supabase.from('instruments').select(`id, instrument_no, ${fieldKey}`),
+      ])
+      if (dbRes.error) throw new Error(`DB 조회 실패: ${dbRes.error.message}`)
+      const dbByNo = new Map<string, { id: string; value: string | null }>()
+      for (const r of (dbRes.data || []) as unknown as Array<Record<string, string | null>>) {
+        const no = r.instrument_no
+        if (!no) continue
+        dbByNo.set(no, { id: r.id as string, value: (r[fieldKey] as string | null) ?? null })
+      }
+
+      // 변경분 추출 (instrument_no가 시트/DB 양쪽에 있고 값이 다른 경우만)
+      type Diff = { id: string; instrument_no: string; oldValue: string | null; newValue: string | null }
+      const diffs: Diff[] = []
+      let skippedNotInDb = 0
+      for (const sheetRow of sheetRows) {
+        const no = sheetRow.instrument_no
+        if (!no) continue
+        const dbRow = dbByNo.get(no)
+        if (!dbRow) { skippedNotInDb++; continue }
+        const newValue = (sheetRow[sheetKey] as string | null) ?? null
+        if ((newValue || '') !== (dbRow.value || '')) {
+          diffs.push({ id: dbRow.id, instrument_no: no, oldValue: dbRow.value, newValue })
+        }
+      }
+
+      if (diffs.length === 0) {
+        setSyncMessage({ kind: 'info', text: `${label}: 변경사항 없음 (시트 ${sheetRows.length}건 확인)` })
+        return
+      }
+
+      // 순차 update (Supabase는 bulk update의 PK 매핑이 까다로워 row-by-row가 안전)
+      let success = 0
+      const failures: string[] = []
+      for (const d of diffs) {
+        const { error } = await supabase
+          .from('instruments')
+          .update({ [fieldKey]: d.newValue, updated_at: new Date().toISOString() })
+          .eq('id', d.id)
+        if (error) {
+          console.warn(`[sync ${fieldKey}] ${d.instrument_no}:`, error)
+          failures.push(d.instrument_no)
+        } else {
+          success++
+        }
+      }
+
+      const parts = [`${label} ${success}건 업데이트`]
+      if (failures.length) parts.push(`실패 ${failures.length}건 (${failures.slice(0, 3).join(', ')}${failures.length > 3 ? '...' : ''})`)
+      if (skippedNotInDb) parts.push(`DB에 없는 시트 row ${skippedNotInDb}건 무시`)
+      setSyncMessage({
+        kind: failures.length ? 'error' : 'success',
+        text: parts.join(' · '),
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.warn(`[sync ${fieldKey}]`, err)
+      setSyncMessage({ kind: 'error', text: `${label} 실패: ${msg}` })
+    }
+  }
+
+  const handleSyncCalibration = async () => {
+    if (syncing) return
+    setSyncing('cal')
+    try { await syncSingleField('last_calibration_date', '교정일자', 'last_calibration_date') }
+    finally { setSyncing(null) }
+  }
+
+  const handleSyncDepartment = async () => {
+    if (syncing) return
+    setSyncing('dept')
+    try { await syncSingleField('department', '사용부서', 'department') }
+    finally { setSyncing(null) }
+  }
+
+  const handleSyncStatus = async () => {
+    if (syncing) return
+    setSyncing('status')
+    try { await syncSingleField('status', '상태', 'status') }
+    finally { setSyncing(null) }
+  }
+
+  /* ── 신규 계측기 INSERT (시트에 있고 DB에 없는 instrument_no) ── */
+  const handleSyncAdd = async () => {
+    if (syncing) return
+    setSyncing('add')
+    setSyncMessage(null)
+    try {
+      const [sheetRows, dbRes] = await Promise.all([
+        fetchSheetDump(),
+        supabase.from('instruments').select('instrument_no'),
+      ])
+      if (dbRes.error) throw new Error(`DB 조회 실패: ${dbRes.error.message}`)
+      const dbNos = new Set<string>()
+      for (const r of (dbRes.data || []) as Array<{ instrument_no: string | null }>) {
+        if (r.instrument_no) dbNos.add(r.instrument_no)
+      }
+
+      // 시트에 있고 DB에 없는 row만 추출 (instrument_no 필수)
+      const toInsert = sheetRows.filter(r => r.instrument_no && !dbNos.has(r.instrument_no))
+
+      if (toInsert.length === 0) {
+        setSyncMessage({ kind: 'info', text: `신규 계측기 없음 (시트 ${sheetRows.length}건 확인)` })
+        return
+      }
+
+      // 시트 row → DB 컬럼 매핑 (purchase_price는 숫자로 변환)
+      const payload = toInsert.map(r => ({
+        instrument_no: r.instrument_no,
+        name: r.name,
+        english_name: r.english_name,
+        model: r.model,
+        serial_number: r.serial_number,
+        manufacturer: r.manufacturer,
+        specification: r.specification,
+        purchase_price: r.purchase_price ? Number(String(r.purchase_price).replace(/[^0-9.-]/g, '')) || null : null,
+        purchase_from: r.purchase_from,
+        purchase_period: r.purchase_period,
+        calibration_cycle: r.calibration_cycle,
+        last_calibration_date: r.last_calibration_date,
+        next_calibration_date: r.next_calibration_date,
+        judgment_criteria: r.judgment_criteria,
+        status: r.status,
+        department: r.department,
+        datalink: r.datalink,
+        q_business: r.q_business,
+        validation_fm: r.validation_fm,
+        validation_qm: r.validation_qm,
+        remarks: r.remarks,
+        remarks2: r.remarks2,
+      }))
+
+      const { error } = await supabase.from('instruments').insert(payload)
+      if (error) {
+        console.warn('[sync add]', error)
+        setSyncMessage({ kind: 'error', text: `신규 계측기 추가 실패: ${error.message}` })
+        return
+      }
+      setSyncMessage({
+        kind: 'success',
+        text: `신규 계측기 ${toInsert.length}건 추가 (${toInsert.slice(0, 3).map(r => r.instrument_no).join(', ')}${toInsert.length > 3 ? '...' : ''})`,
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.warn('[sync add]', err)
+      setSyncMessage({ kind: 'error', text: `신규 계측기 추가 실패: ${msg}` })
+    } finally {
+      setSyncing(null)
     }
   }
 
@@ -416,6 +626,55 @@ export default function InstrumentPage({ user }: Props) {
         >
           계측기 관리 대장
         </button>
+
+        {/* 4. 시트 → DB 동기화 (품질팀 전용) */}
+        {canSync && (
+          <section className="rounded-xl bg-(--color-surface) border border-(--color-border) p-4">
+            <div className="mb-3">
+              <div className="text-sm font-semibold text-(--color-text)">시트 → DB 동기화</div>
+              <div className="text-xs text-(--color-text-secondary) mt-0.5">품질팀 전용 · 관리번호 기준으로 비교</div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={handleSyncCalibration}
+                disabled={syncing !== null}
+                className="rounded-lg border border-(--color-border) bg-(--color-bg) py-2.5 text-sm font-medium text-(--color-text) hover:bg-(--color-border)/40 disabled:opacity-50"
+              >
+                {syncing === 'cal' ? '...' : '교정일자 업데이트'}
+              </button>
+              <button
+                onClick={handleSyncDepartment}
+                disabled={syncing !== null}
+                className="rounded-lg border border-(--color-border) bg-(--color-bg) py-2.5 text-sm font-medium text-(--color-text) hover:bg-(--color-border)/40 disabled:opacity-50"
+              >
+                {syncing === 'dept' ? '...' : '사용부서 업데이트'}
+              </button>
+              <button
+                onClick={handleSyncStatus}
+                disabled={syncing !== null}
+                className="rounded-lg border border-(--color-border) bg-(--color-bg) py-2.5 text-sm font-medium text-(--color-text) hover:bg-(--color-border)/40 disabled:opacity-50"
+              >
+                {syncing === 'status' ? '...' : '상태 업데이트'}
+              </button>
+              <button
+                onClick={handleSyncAdd}
+                disabled={syncing !== null}
+                className="rounded-lg border border-(--color-border) bg-(--color-bg) py-2.5 text-sm font-medium text-(--color-text) hover:bg-(--color-border)/40 disabled:opacity-50"
+              >
+                {syncing === 'add' ? '...' : '계측기 추가 업데이트'}
+              </button>
+            </div>
+            {syncMessage && (
+              <p className={`mt-3 text-sm ${
+                syncMessage.kind === 'error' ? 'text-red-500'
+                  : syncMessage.kind === 'success' ? 'text-(--color-primary)'
+                  : 'text-(--color-text-secondary)'
+              }`}>
+                {syncMessage.text}
+              </p>
+            )}
+          </section>
+        )}
       </div>
     </div>
   )
