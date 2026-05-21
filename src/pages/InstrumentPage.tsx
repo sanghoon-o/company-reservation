@@ -143,7 +143,7 @@ const getPrimaryLabel = (i: Instrument): string =>
   i.name || i.english_name || i.model || i.instrument_no || '-'
 
 const getSubLabel = (i: Instrument): string =>
-  [i.english_name, i.model, i.instrument_no].filter(Boolean).join(' · ')
+  [i.english_name, i.model, i.serial_number].filter(Boolean).join(' · ')
 
 // 계측기명(한글/영문) 또는 모델로만 검색 (관리번호는 제외)
 async function searchByDisplay(q: string, limit = 10): Promise<Instrument[]> {
@@ -546,36 +546,36 @@ export default function InstrumentPage({ user }: Props) {
         {/* 1. 사용할 계측기 선택 */}
         <section className="rounded-xl bg-(--color-surface) border border-(--color-border) p-4">
           <label className="block text-sm font-semibold mb-2 text-(--color-text)">사용할 계측기 선택</label>
-          <div className="flex items-center gap-2">
-            <input
-              className={inputCls}
-              value={useInput}
-              onChange={e => setUseInput(e.target.value)}
-              onFocus={() => { if (useSuggestions.length > 0 && !selectedUse) setShowUseList(true) }}
-              placeholder="계측기명(한글/영문) 또는 모델"
-            />
-            <button
-              onClick={handleUse}
-              disabled={useLoading || !selectedUse}
-              className="rounded-lg bg-(--color-primary) px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              {useLoading ? '...' : '사용'}
-            </button>
-          </div>
+          <input
+            className={inputCls}
+            value={useInput}
+            onChange={e => setUseInput(e.target.value)}
+            onFocus={() => { if (useSuggestions.length > 0 && !selectedUse) setShowUseList(true) }}
+            placeholder="계측기명(한글/영문) 또는 모델"
+          />
+          <button
+            onClick={handleUse}
+            disabled={useLoading || !selectedUse}
+            className="mt-2 w-full rounded-lg bg-(--color-primary) py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {useLoading ? '...' : '사용'}
+          </button>
 
           {/* 자동완성 드롭다운 — 선택 안 된 상태에서만 표시 */}
           {showUseList && !selectedUse && useInput.trim() && (
             useSuggestions.length > 0 ? (
-              <div className="mt-2 rounded-lg border border-(--color-border) bg-(--color-bg) max-h-64 overflow-y-auto divide-y divide-(--color-border)">
-                {useSuggestions.map(s => (
+              <div className="mt-2 rounded-lg border border-(--color-border) bg-(--color-bg) max-h-80 overflow-y-auto">
+                {useSuggestions.map((s, idx) => (
                   <button
                     key={s.id}
                     onClick={() => selectInstrument(s)}
-                    className="w-full px-3 py-2 text-left hover:bg-(--color-border)/40"
+                    className={`w-full px-3 py-2.5 text-left hover:bg-(--color-primary)/15 ${
+                      idx % 2 === 0 ? 'bg-(--color-bg)' : 'bg-(--color-border)/15'
+                    }`}
                   >
-                    <div className="text-sm font-medium text-(--color-text)">{getPrimaryLabel(s)}</div>
+                    <div className="text-sm font-medium text-(--color-text) break-words">{getPrimaryLabel(s)}</div>
                     {getSubLabel(s) && (
-                      <div className="text-xs text-(--color-text-secondary) truncate">{getSubLabel(s)}</div>
+                      <div className="text-xs text-(--color-text-secondary) break-words whitespace-normal mt-0.5">{getSubLabel(s)}</div>
                     )}
                   </button>
                 ))}
@@ -606,37 +606,37 @@ export default function InstrumentPage({ user }: Props) {
         {/* 2. 계측기 찾기 */}
         <section className="rounded-xl bg-(--color-surface) border border-(--color-border) p-4">
           <label className="block text-sm font-semibold mb-2 text-(--color-text)">계측기 찾기</label>
-          <div className="flex items-center gap-2">
-            <input
-              className={inputCls}
-              value={findInput}
-              onChange={e => setFindInput(e.target.value)}
-              onFocus={() => { if (findSuggestions.length > 0 && !selectedFind) setShowFindList(true) }}
-              placeholder="계측기명 / 모델 / 관리번호"
-              onKeyDown={e => { if (e.key === 'Enter') handleFind() }}
-            />
-            <button
-              onClick={handleFind}
-              disabled={findLoading}
-              className="rounded-lg border border-(--color-border) px-4 py-2.5 text-sm font-medium text-(--color-text) disabled:opacity-50"
-            >
-              {findLoading ? '...' : '찾기'}
-            </button>
-          </div>
+          <input
+            className={inputCls}
+            value={findInput}
+            onChange={e => setFindInput(e.target.value)}
+            onFocus={() => { if (findSuggestions.length > 0 && !selectedFind) setShowFindList(true) }}
+            placeholder="계측기명 / 모델 / 관리번호"
+            onKeyDown={e => { if (e.key === 'Enter') handleFind() }}
+          />
+          <button
+            onClick={handleFind}
+            disabled={findLoading}
+            className="mt-2 w-full rounded-lg border border-(--color-border) py-2.5 text-sm font-medium text-(--color-text) disabled:opacity-50"
+          >
+            {findLoading ? '...' : '찾기'}
+          </button>
 
           {/* 자동완성 드롭다운 — 선택 안 된 상태에서만 표시 */}
           {showFindList && !selectedFind && findInput.trim() && (
             findSuggestions.length > 0 ? (
-              <div className="mt-2 rounded-lg border border-(--color-border) bg-(--color-bg) max-h-64 overflow-y-auto divide-y divide-(--color-border)">
-                {findSuggestions.map(s => (
+              <div className="mt-2 rounded-lg border border-(--color-border) bg-(--color-bg) max-h-80 overflow-y-auto">
+                {findSuggestions.map((s, idx) => (
                   <button
                     key={s.id}
                     onClick={() => selectFindInstrument(s)}
-                    className="w-full px-3 py-2 text-left hover:bg-(--color-border)/40"
+                    className={`w-full px-3 py-2.5 text-left hover:bg-(--color-primary)/15 ${
+                      idx % 2 === 0 ? 'bg-(--color-bg)' : 'bg-(--color-border)/15'
+                    }`}
                   >
-                    <div className="text-sm font-medium text-(--color-text)">{getPrimaryLabel(s)}</div>
+                    <div className="text-sm font-medium text-(--color-text) break-words">{getPrimaryLabel(s)}</div>
                     {getSubLabel(s) && (
-                      <div className="text-xs text-(--color-text-secondary) truncate">{getSubLabel(s)}</div>
+                      <div className="text-xs text-(--color-text-secondary) break-words whitespace-normal mt-0.5">{getSubLabel(s)}</div>
                     )}
                   </button>
                 ))}
