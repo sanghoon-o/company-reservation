@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileText } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { CARS, type CarReservation, type CarLog, type User } from '../lib/types'
 import Modal from '../components/Modal'
@@ -385,13 +385,24 @@ export default function CarPage({ user }: Props) {
       </div>
 
       {/* Legend */}
-      <div className="flex gap-3 px-4 pb-2 text-xs">
-        {CARS.map(car => (
-          <span key={car.name} className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: car.color }} />
-            {car.name}
-          </span>
-        ))}
+      <div className="flex items-center px-4 pb-2 text-xs">
+        <div className="flex gap-3 flex-1">
+          {CARS.map(car => (
+            <span key={car.name} className="flex items-center gap-1">
+              <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: car.color }} />
+              {car.name}
+            </span>
+          ))}
+        </div>
+        <a
+          href={SHEET_VIEW_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 px-2 py-1 rounded-md bg-(--color-surface) border border-(--color-border) text-(--color-text-secondary) hover:text-(--color-primary) hover:border-(--color-primary-light)"
+        >
+          <FileText size={12} />
+          차량일지 보기
+        </a>
       </div>
 
       {/* Calendar */}
