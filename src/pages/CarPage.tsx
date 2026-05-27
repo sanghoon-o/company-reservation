@@ -233,8 +233,11 @@ export default function CarPage({ user }: Props) {
       return fallback
     }
 
+    // 같은 기기에서 마지막으로 입력한 부서 (시트/캐시에 부서가 없을 때 fallback)
+    const lastDept = localStorage.getItem(`car_log_dept_${user.id}`) || ''
+
     setLogName(pick(sheetData?.user_name, cached?.user_name, user.name))
-    setLogDepartment(pick(sheetData?.department, cached?.department))
+    setLogDepartment(pick(sheetData?.department, cached?.department, lastDept))
     // 주행 전: 시트 매칭값 → 캐시 → 같은 차종 최근 odo_after fallback
     setLogOdoBefore(pick(sheetData?.odo_before, cached?.odo_before, lastOdoAfter))
     setLogOdoAfter(pick(sheetData?.odo_after, cached?.odo_after))
@@ -247,12 +250,15 @@ export default function CarPage({ user }: Props) {
   }
 
   const handleSaveLog = async () => {
-    if (!modal?.reservation || !logName.trim() || !logOdoBefore) return
+    if (!modal?.reservation || !logName.trim() || !logDepartment.trim() || !logOdoBefore) return
     setLoading(true)
     try {
       const hasOdoAfter = !!logOdoAfter
       const distance = hasOdoAfter ? Number(logOdoAfter) - Number(logOdoBefore) : null
       const existing = carLogs[modal.reservation.id]
+
+      // 다음 일지 작성 시 자동 채움용으로 부서를 로컬에 보존
+      localStorage.setItem(`car_log_dept_${user.id}`, logDepartment.trim())
 
       // Google Sheet 저장 - iframe 방식 (검증됨: 이전 버전에서 실제 row 저장 동작 확인)
       console.log('[CarLog] SHEET_URL:', SHEET_URL)
@@ -684,7 +690,7 @@ export default function CarPage({ user }: Props) {
               />
               <input
                 type="text"
-                placeholder="부서"
+                placeholder="부서 *"
               value={logDepartment}
               onChange={e => setLogDepartment(e.target.value)}
               className="w-full rounded-lg border border-(--color-border) bg-(--color-bg) px-4 py-3 text-sm text-(--color-text) outline-none focus:border-(--color-primary-light)"
@@ -736,7 +742,7 @@ export default function CarPage({ user }: Props) {
             />
             <button
               onClick={handleSaveLog}
-              disabled={!logName.trim() || !logOdoBefore || loading}
+              disabled={!logName.trim() || !logDepartment.trim() || !logOdoBefore || loading}
               className="w-full rounded-lg bg-(--color-primary) py-3 text-sm font-semibold text-white disabled:opacity-50"
             >
               {loading ? '저장 중...' : '저장'}
