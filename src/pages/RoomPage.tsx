@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { MEETING_ROOMS, type RoomReservation, type User } from '../lib/types'
+import type { MeetingRoom } from '../lib/types'
 import Modal from '../components/Modal'
 import { toLocalDateStr } from '../lib/date'
 import { usePullToRefresh } from '../lib/usePullToRefresh'
@@ -45,18 +46,6 @@ function generateDates(): string[] {
   }
   return dates
 }
-
-const ROOM_INFO: Record<string, { color: string; reservationColor: { bg: string; border: string; text: string } }> = {
-  '미팅룸7': {
-    color: '#6366f1',
-    reservationColor: { bg: 'rgba(96,165,250,0.35)', border: 'rgba(96,165,250,0.8)', text: '#1e40af' },
-  },
-  '미팅룸8': {
-    color: '#0ea5e9',
-    reservationColor: { bg: 'rgba(251,182,206,0.45)', border: 'rgba(244,143,177,0.8)', text: '#9d174d' },
-  },
-}
-
 
 export default function RoomPage({ user }: Props) {
   const dates = generateDates()
@@ -128,7 +117,7 @@ export default function RoomPage({ user }: Props) {
     return time
   }
 
-  const handleTimelineClick = (room: string, e: React.MouseEvent<HTMLDivElement>) => {
+  const handleTimelineClick = (room: string, disabled: boolean, e: React.MouseEvent<HTMLDivElement>) => {
     const clickedTime = getSlotFromClick(e)
 
     const existing = reservations.find(r =>
@@ -138,6 +127,9 @@ export default function RoomPage({ user }: Props) {
       setModal({ type: 'detail', room, slot: clickedTime, reservation: existing })
       return
     }
+
+    // 예약 불가 미팅룸은 신규 예약을 받지 않음
+    if (disabled) return
 
     setEndTime(getEndTimeOptions(clickedTime)[0] || '')
     setPurpose('')
@@ -245,8 +237,10 @@ export default function RoomPage({ user }: Props) {
 
       {/* Room cards */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto pb-24 px-4 pt-4 space-y-5">
-        {MEETING_ROOMS.map(room => {
-          const info = ROOM_INFO[room]
+        {MEETING_ROOMS.map((roomConfig: MeetingRoom) => {
+          const room = roomConfig.name
+          const info = roomConfig
+          const disabled = !!roomConfig.disabled
           const roomRes = getRoomReservations(room)
 
           return (
@@ -254,16 +248,16 @@ export default function RoomPage({ user }: Props) {
               {/* Room header */}
               <div className="flex items-center gap-3 px-4 pt-4 pb-3">
                 <div
-                  className="flex h-12 w-12 items-center justify-center rounded-xl text-white font-bold text-lg"
+                  className="flex h-12 w-12 items-center justify-center rounded-xl text-white font-bold text-sm"
                   style={{ backgroundColor: info.color }}
                 >
-                  {room.replace('미팅룸', '')}
+                  {roomConfig.badge}
                 </div>
                 <div className="flex-1">
                   <h3 className="text-base font-bold text-(--color-text)">{room}</h3>
                 </div>
                 <div className="text-xs text-(--color-text-secondary)">
-                  {roomRes.length > 0 ? `${roomRes.length}건 예약` : '예약 없음'}
+                  {disabled ? '예약 불가' : roomRes.length > 0 ? `${roomRes.length}건 예약` : '예약 없음'}
                 </div>
               </div>
 
@@ -288,8 +282,8 @@ export default function RoomPage({ user }: Props) {
 
                   {/* Timeline bar */}
                   <div
-                    className="relative h-16 rounded-xl bg-(--color-bg) border border-(--color-border) cursor-pointer overflow-hidden"
-                    onClick={(e) => handleTimelineClick(room, e)}
+                    className={`relative h-16 rounded-xl bg-(--color-bg) border border-(--color-border) overflow-hidden ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                    onClick={(e) => handleTimelineClick(room, disabled, e)}
                   >
                     {/* Hour grid lines */}
                     {HOURS.map(h => {

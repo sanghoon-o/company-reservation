@@ -67,7 +67,43 @@ export const CARS: Car[] = [
   { name: '레이', color: '#ea580c', bgLight: '#ffedd5', bgDark: '#7c2d12' },
 ]
 
-export const MEETING_ROOMS = ['미팅룸7', '미팅룸8']
+export interface MeetingRoom {
+  name: string
+  badge: string
+  color: string
+  reservationColor: { bg: string; border: string; text: string }
+  /** true면 예약 불가 (조회만 가능) */
+  disabled?: boolean
+}
+
+export const MEETING_ROOMS: MeetingRoom[] = [
+  {
+    name: '미팅룸7(GEO)',
+    badge: 'GEO',
+    color: '#6366f1',
+    reservationColor: { bg: 'rgba(96,165,250,0.35)', border: 'rgba(96,165,250,0.8)', text: '#1e40af' },
+  },
+  {
+    name: '미팅룸7(MEO)',
+    badge: 'MEO',
+    color: '#14b8a6',
+    reservationColor: { bg: 'rgba(45,212,191,0.35)', border: 'rgba(20,184,166,0.8)', text: '#115e59' },
+  },
+  {
+    name: '미팅룸7(LEO)',
+    badge: 'LEO',
+    color: '#94a3b8',
+    reservationColor: { bg: 'rgba(148,163,184,0.35)', border: 'rgba(100,116,139,0.8)', text: '#334155' },
+    disabled: true,
+  },
+  {
+    name: '미팅룸8',
+    badge: '8',
+    color: '#0ea5e9',
+    reservationColor: { bg: 'rgba(251,182,206,0.45)', border: 'rgba(244,143,177,0.8)', text: '#9d174d' },
+  },
+]
+
 export const CHAMBERS = ['챔버']
 
 export interface Instrument {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'reservation-v29';
+const CACHE_NAME = 'reservation-v30';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
