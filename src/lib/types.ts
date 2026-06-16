@@ -78,6 +78,12 @@ export interface MeetingRoom {
 
 export const MEETING_ROOMS: MeetingRoom[] = [
   {
+    name: '미팅룸8',
+    badge: '8',
+    color: '#0ea5e9',
+    reservationColor: { bg: 'rgba(251,182,206,0.45)', border: 'rgba(244,143,177,0.8)', text: '#9d174d' },
+  },
+  {
     name: '미팅룸7(GEO)',
     badge: 'GEO',
     color: '#6366f1',
@@ -95,12 +101,6 @@ export const MEETING_ROOMS: MeetingRoom[] = [
     color: '#94a3b8',
     reservationColor: { bg: 'rgba(148,163,184,0.35)', border: 'rgba(100,116,139,0.8)', text: '#334155' },
     disabled: true,
-  },
-  {
-    name: '미팅룸8',
-    badge: '8',
-    color: '#0ea5e9',
-    reservationColor: { bg: 'rgba(251,182,206,0.45)', border: 'rgba(244,143,177,0.8)', text: '#9d174d' },
   },
 ]
 
