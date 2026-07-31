@@ -197,8 +197,7 @@ export default function InstrumentPage({ user }: Props) {
   const [showFindList, setShowFindList] = useState(false)
   const [findResult, setFindResult] = useState<
     | { kind: 'none' }
-    | { kind: 'empty'; instrumentName: string; department: string | null }
-    | { kind: 'usage'; usage: InstrumentUsage }
+    | { kind: 'found'; instrumentName: string; department: string | null; usage: InstrumentUsage | null }
     | { kind: 'notfound' }
   >({ kind: 'none' })
   const [findLoading, setFindLoading] = useState(false)
@@ -292,6 +291,13 @@ export default function InstrumentPage({ user }: Props) {
         return
       }
 
+      // DB의 사용부서도 함께 갱신 — 시트만 갱신하면 '계측기 찾기'가 옛 값을 계속 보여줌
+      const { error: deptErr } = await supabase
+        .from('instruments')
+        .update({ department: user.name, updated_at: new Date().toISOString() })
+        .eq('id', selectedUse.id)
+      if (deptErr) console.warn('[instruments department update]', deptErr)
+
       // Google Sheet '사용부서' 컬럼 업데이트 + 결과 확인
       const sheetRes = await updateSheetDepartment({
         instrument_no: selectedUse.instrument_no,
@@ -319,7 +325,12 @@ export default function InstrumentPage({ user }: Props) {
   /* ── 사용 중 찾기 ──
    * selectedFind(드롭다운에서 명시적 클릭한 row) 우선.
    * 같은 name을 가진 다른 instrument와 혼동되지 않게 id로 정확 매칭.
-   * selectedFind가 없으면 instrument_no 정확 매칭 → 라벨 매칭 순으로 fallback. */
+   * selectedFind가 없으면 instrument_no 정확 매칭 → 라벨 매칭 순으로 fallback.
+   *
+   * 현재 사용부서는 instruments.department가 단일 진실 소스.
+   * (사용 등록 / '사용부서 업데이트' 동기화 양쪽이 모두 이 컬럼을 갱신)
+   * instrument_usages는 이력일 뿐이라 최신 상태로 쓰면 안 됨 — 예전에 이 이력을
+   * 우선 표시해서 동기화 후에도 옛 사용자가 나오는 버그가 있었음. */
   const handleFind = async () => {
     const v = findInput.trim()
     if (!v && !selectedFind) { setFindResult({ kind: 'none' }); return }
@@ -336,27 +347,28 @@ export default function InstrumentPage({ user }: Props) {
           ) || rows[0] || null
       }
       if (!target) { setFindResult({ kind: 'notfound' }); return }
-      const { data, error } = await supabase
-        .from('instrument_usages')
-        .select('*')
-        .eq('instrument_id', target.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-      if (error) {
-        console.warn('[instrument_usages query]', error)
-        setFindResult({ kind: 'notfound' })
-        return
-      }
-      const usage = (data && data[0]) as InstrumentUsage | undefined
-      if (!usage) {
-        setFindResult({
-          kind: 'empty',
-          instrumentName: getPrimaryLabel(target),
-          department: target.department ?? null,
-        })
-        return
-      }
-      setFindResult({ kind: 'usage', usage })
+
+      // 드롭다운 선택 시점의 스냅샷은 '사용부서 업데이트' 이후 값이 반영 안 됨 → id로 재조회
+      const [freshRes, usageRes] = await Promise.all([
+        supabase.from('instruments').select('*').eq('id', target.id).maybeSingle(),
+        supabase
+          .from('instrument_usages')
+          .select('*')
+          .eq('instrument_id', target.id)
+          .order('created_at', { ascending: false })
+          .limit(1),
+      ])
+      if (freshRes.error) console.warn('[instruments refetch]', freshRes.error)
+      if (usageRes.error) console.warn('[instrument_usages query]', usageRes.error)
+
+      const current = (freshRes.data as Instrument | null) || target
+      const usage = (usageRes.data && usageRes.data[0]) as InstrumentUsage | undefined
+      setFindResult({
+        kind: 'found',
+        instrumentName: getPrimaryLabel(current),
+        department: current.department ?? null,
+        usage: usage ?? null,
+      })
     } finally {
       setFindLoading(false)
     }
@@ -665,18 +677,29 @@ export default function InstrumentPage({ user }: Props) {
             </div>
           )}
 
-          {findResult.kind === 'usage' && (
-            <p className="mt-3 text-sm text-(--color-text)">
-              {formatKoreanDate(findResult.usage.date)} <strong>{findResult.usage.user_name}</strong>님이 사용중입니다.
-            </p>
-          )}
-          {findResult.kind === 'empty' && (
-            <p className="mt-3 text-sm text-(--color-text-secondary)">
-              {findResult.instrumentName}
-              {findResult.department
-                ? <> — 사용부서: <strong className="text-(--color-text)">{findResult.department}</strong></>
-                : ' — 사용 기록이 없습니다.'}
-            </p>
+          {findResult.kind === 'found' && (
+            <div className="mt-3">
+              {findResult.department ? (
+                <p className="text-sm text-(--color-text-secondary)">
+                  {findResult.instrumentName} — 사용부서:{' '}
+                  <strong className="text-(--color-text)">{findResult.department}</strong>
+                </p>
+              ) : findResult.usage ? (
+                <p className="text-sm text-(--color-text)">
+                  {formatKoreanDate(findResult.usage.date)} <strong>{findResult.usage.user_name}</strong>님이 사용중입니다.
+                </p>
+              ) : (
+                <p className="text-sm text-(--color-text-secondary)">
+                  {findResult.instrumentName} — 사용 기록이 없습니다.
+                </p>
+              )}
+              {/* 사용부서(현재 상태)와 별개로 최근 사용 등록 이력을 보조 표시 */}
+              {findResult.department && findResult.usage && (
+                <p className="mt-1 text-xs text-(--color-text-secondary)">
+                  최근 사용 등록 · {formatKoreanDate(findResult.usage.date)} {findResult.usage.user_name}님
+                </p>
+              )}
+            </div>
           )}
           {findResult.kind === 'notfound' && (
             <p className="mt-3 text-sm text-red-500">일치하는 계측기를 찾지 못했습니다.</p>
