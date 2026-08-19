@@ -1,9 +1,12 @@
 import { Car, DoorOpen, Box, CalendarCheck, Gauge } from 'lucide-react'
 import type { TabType } from '../lib/types'
 
+// 미팅룸 예약은 외부 솔루션으로 이관 → 탭 숨김 (되살리려면 ROOM_TAB_ENABLED = true)
+export const ROOM_TAB_ENABLED = false
+
 const tabs: { key: TabType; label: string; icon: typeof Car }[] = [
   { key: 'car', label: '차량', icon: Car },
-  { key: 'room', label: '미팅룸', icon: DoorOpen },
+  ...(ROOM_TAB_ENABLED ? [{ key: 'room' as const, label: '미팅룸', icon: DoorOpen }] : []),
   { key: 'chamber', label: '챔버', icon: Box },
   { key: 'instrument', label: '계측기', icon: Gauge },
   { key: 'my', label: '내예약', icon: CalendarCheck },

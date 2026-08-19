@@ -4,7 +4,7 @@ import { useDarkMode } from './lib/useDarkMode'
 import { toLocalDateStr } from './lib/date'
 import type { TabType } from './lib/types'
 import LoginModal from './components/LoginModal'
-import TabBar from './components/TabBar'
+import TabBar, { ROOM_TAB_ENABLED } from './components/TabBar'
 import CarPage from './pages/CarPage'
 import RoomPage from './pages/RoomPage'
 import ChamberPage from './pages/ChamberPage'
@@ -42,7 +42,7 @@ export default function App() {
     <div className="flex h-full flex-col bg-(--color-bg)">
       <div className="flex-1 overflow-hidden">
         {tab === 'car' && <CarPage user={user} />}
-        {tab === 'room' && <RoomPage user={user} />}
+        {ROOM_TAB_ENABLED && tab === 'room' && <RoomPage user={user} />}
         {tab === 'chamber' && <ChamberPage user={user} />}
         {tab === 'instrument' && <InstrumentPage user={user} />}
         {tab === 'my' && <MyPage user={user} onLogout={logout} dark={dark} onToggleDark={toggle} />}
