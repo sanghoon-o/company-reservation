@@ -5,6 +5,7 @@ import { toLocalDateStr } from './lib/date'
 import type { TabType } from './lib/types'
 import LoginModal from './components/LoginModal'
 import TabBar, { ROOM_TAB_ENABLED } from './components/TabBar'
+import Modal from './components/Modal'
 import CarPage from './pages/CarPage'
 import RoomPage from './pages/RoomPage'
 import ChamberPage from './pages/ChamberPage'
@@ -21,6 +22,16 @@ export default function App() {
   const { dark, toggle } = useDarkMode()
   const [tab, setTab] = useState<TabType>('car')
   const [showNotice, setShowNotice] = useState(false)
+  const [showRoomMoved, setShowRoomMoved] = useState(false)
+
+  // 미팅룸 탭은 노출하되, 터치하면 네이버 웍스 안내 팝업만 표시
+  const handleTabChange = (next: TabType) => {
+    if (next === 'room' && !ROOM_TAB_ENABLED) {
+      setShowRoomMoved(true)
+      return
+    }
+    setTab(next)
+  }
 
   useEffect(() => {
     const today = toLocalDateStr()
@@ -47,7 +58,25 @@ export default function App() {
         {tab === 'instrument' && <InstrumentPage user={user} />}
         {tab === 'my' && <MyPage user={user} onLogout={logout} dark={dark} onToggleDark={toggle} />}
       </div>
-      <TabBar active={tab} onChange={setTab} />
+      <TabBar active={tab} onChange={handleTabChange} />
+
+      {/* 미팅룸 예약 이관 안내 */}
+      <Modal open={showRoomMoved} onClose={() => setShowRoomMoved(false)} title="미팅룸 예약 안내">
+        <div className="space-y-3 text-sm text-(--color-text) leading-relaxed">
+          <p>
+            미팅룸(회의실) 예약은 <strong className="text-(--color-primary)">네이버 웍스</strong>에서 진행해 주세요.
+          </p>
+          <p className="text-(--color-text-secondary)">
+            네이버 웍스 앱 &gt; 예약 메뉴에서 회의실을 예약하실 수 있습니다.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowRoomMoved(false)}
+          className="w-full mt-5 rounded-lg bg-(--color-primary) py-3 text-sm font-semibold text-white"
+        >
+          확인
+        </button>
+      </Modal>
 
       {/* 공지 팝업 */}
       {showNotice && (
