@@ -116,15 +116,9 @@ export default function CarPage({ user }: Props) {
   const firstDayOfWeek = new Date(year, month, 1).getDay()
   const totalRows = Math.ceil((firstDayOfWeek + daysInMonth) / 7)
   const today = toLocalDateStr()
-  const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`
-  // 표시 중인 달에 한 번이라도 노출되는 차량 (차량 교체월에는 옛 차/새 차가 함께 보임)
-  const legendCars = (() => {
-    const shown = new Set([
-      ...carsForDate(`${monthPrefix}-01`),
-      ...carsForDate(`${monthPrefix}-${String(daysInMonth).padStart(2, '0')}`),
-    ])
-    return CARS.filter(car => shown.has(car))
-  })()
+  // 범례는 선택된 날짜 기준 (하단 슬롯 카드와 동일) —
+  // 교체 이전 날짜를 보면 싼타페, 9/11 이후면 스팅어만 표시
+  const legendCars = carsForDate(selectedDate)
   const carPlate = (carName: string) => CARS.find(c => c.name === carName)?.plate
 
   // 챔버 패턴: 하단 슬롯 클릭
