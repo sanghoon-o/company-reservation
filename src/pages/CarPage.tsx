@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, FileText } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { CARS, type CarReservation, type CarLog, type User } from '../lib/types'
+import { CARS, carsForDate, type CarReservation, type CarLog, type User } from '../lib/types'
 import Modal from '../components/Modal'
 import { toLocalDateStr } from '../lib/date'
 import { usePullToRefresh } from '../lib/usePullToRefresh'
@@ -116,6 +116,16 @@ export default function CarPage({ user }: Props) {
   const firstDayOfWeek = new Date(year, month, 1).getDay()
   const totalRows = Math.ceil((firstDayOfWeek + daysInMonth) / 7)
   const today = toLocalDateStr()
+  const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`
+  // 표시 중인 달에 한 번이라도 노출되는 차량 (차량 교체월에는 옛 차/새 차가 함께 보임)
+  const legendCars = (() => {
+    const shown = new Set([
+      ...carsForDate(`${monthPrefix}-01`),
+      ...carsForDate(`${monthPrefix}-${String(daysInMonth).padStart(2, '0')}`),
+    ])
+    return CARS.filter(car => shown.has(car))
+  })()
+  const carPlate = (carName: string) => CARS.find(c => c.name === carName)?.plate
 
   // 챔버 패턴: 하단 슬롯 클릭
   const handleSlotClick = (carName: string, slot: 'am' | 'pm') => {
@@ -223,6 +233,12 @@ export default function CarPage({ user }: Props) {
       } catch (err) {
         console.warn('Sheet query failed:', err)
       }
+    }
+
+    // 시트 이력이 없는 신규 도입 차량(스팅어 등)은 등록 키로수를 '주행 전' 기본값으로
+    if (!lastOdoAfter) {
+      const initial = CARS.find(c => c.name === currentCar)?.initialOdo
+      if (initial != null) lastOdoAfter = String(initial)
     }
 
     // Fallback: Supabase 캐시
@@ -387,7 +403,7 @@ export default function CarPage({ user }: Props) {
       {/* Legend */}
       <div className="flex items-center px-4 pb-2 text-xs">
         <div className="flex gap-3 flex-1">
-          {CARS.map(car => (
+          {legendCars.map(car => (
             <span key={car.name} className="flex items-center gap-1">
               <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: car.color }} />
               {car.name}
@@ -450,7 +466,7 @@ export default function CarPage({ user }: Props) {
                 </span>
                 {/* 차량 3대 × 오전/오후 분할 bar — 예약전=진한톤, 예약됨=연한톤(alpha) */}
                 <div className="mt-1 flex flex-col gap-px flex-1 justify-end pb-0.5">
-                  {CARS.map(car => {
+                  {carsForDate(dateStr).map(car => {
                     const am = getReservationForSlot(dateStr, car.name, 'am')
                     const pm = getReservationForSlot(dateStr, car.name, 'pm')
                     return (
@@ -488,7 +504,7 @@ export default function CarPage({ user }: Props) {
 
       <div className="flex-1 overflow-y-auto pb-20 px-4 pt-2">
         <div className="space-y-1.5">
-          {CARS.map(car => {
+          {carsForDate(selectedDate).map(car => {
             const am = getReservationForSlot(selectedDate, car.name, 'am')
             const pm = getReservationForSlot(selectedDate, car.name, 'pm')
             const isFullBooked = !!(am && pm && am.id === pm.id)
@@ -649,7 +665,15 @@ export default function CarPage({ user }: Props) {
         {modal?.reservation && (
           <div className="space-y-4">
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-(--color-text-secondary)">차량</span><span className="font-medium">{modal.reservation.car_name}</span></div>
+              <div className="flex justify-between">
+                <span className="text-(--color-text-secondary)">차량</span>
+                <span className="font-medium">
+                  {modal.reservation.car_name}
+                  {carPlate(modal.reservation.car_name) && (
+                    <span className="ml-1 font-normal text-(--color-text-secondary)">{carPlate(modal.reservation.car_name)}</span>
+                  )}
+                </span>
+              </div>
               <div className="flex justify-between"><span className="text-(--color-text-secondary)">날짜</span><span>{formatDate(modal.reservation.date)}</span></div>
               <div className="flex justify-between">
                 <span className="text-(--color-text-secondary)">시간대</span>
@@ -688,7 +712,12 @@ export default function CarPage({ user }: Props) {
               </div>
               <div>
                 <div className="text-[10px] text-(--color-text-secondary)">차량</div>
-                <div className="font-medium">{modal.car}</div>
+                <div className="font-medium">
+                  {modal.car}
+                  {carPlate(modal.car) && (
+                    <span className="ml-1 text-[11px] font-normal text-(--color-text-secondary)">{carPlate(modal.car)}</span>
+                  )}
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">

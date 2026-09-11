@@ -59,13 +59,43 @@ export interface Car {
   color: string
   bgLight: string
   bgDark: string
+  /** 차량 번호판 (일지/예약 정보에 표시) */
+  plate?: string
+  /** 이 날짜(포함)부터 예약 가능 — 신규 도입 차량 */
+  activeFrom?: string
+  /** 이 날짜(포함)부터 예약 불가 — 교체/매각된 차량 (이전 날짜는 조회 유지) */
+  retiredFrom?: string
+  /** 시트 이력이 없을 때 '주행 전' 기본값 (신규 차량 최초 키로수) */
+  initialOdo?: number
 }
+
+/** 싼타페 → 스팅어 교체일. 이 날짜부터 싼타페는 예약 불가, 스팅어 예약 가능 */
+export const CAR_SWAP_DATE = '2026-09-11'
 
 export const CARS: Car[] = [
   { name: '카니발', color: '#2563eb', bgLight: '#dbeafe', bgDark: '#1e3a5f' },
-  { name: '싼타페', color: '#16a34a', bgLight: '#dcfce7', bgDark: '#14532d' },
+  {
+    name: '스팅어',
+    color: '#7c3aed',
+    bgLight: '#ede9fe',
+    bgDark: '#4c1d95',
+    plate: '04누 7959',
+    activeFrom: CAR_SWAP_DATE,
+    initialOdo: 140800,
+  },
+  // 스팅어로 교체됨 — CAR_SWAP_DATE 이전 날짜의 지난 예약 조회용으로만 남겨둠
+  { name: '싼타페', color: '#16a34a', bgLight: '#dcfce7', bgDark: '#14532d', retiredFrom: CAR_SWAP_DATE },
   { name: '레이', color: '#ea580c', bgLight: '#ffedd5', bgDark: '#7c2d12' },
 ]
+
+/** 해당 날짜(YYYY-MM-DD)에 노출할 차량 목록 */
+export function carsForDate(date: string): Car[] {
+  return CARS.filter(car => {
+    if (car.activeFrom && date < car.activeFrom) return false
+    if (car.retiredFrom && date >= car.retiredFrom) return false
+    return true
+  })
+}
 
 export interface MeetingRoom {
   name: string
